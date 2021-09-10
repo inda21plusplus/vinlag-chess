@@ -5,6 +5,8 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "terminal.integrated.shell.windows": "cmd.exe",
+            "terminal.integrated.shellArgs.windows": ["-NoExit", "/c", "chcp.com 65001"],
             "type": "lldb",
             "request": "launch",
             "name": "Debug executable 'vinlag-chess'",
