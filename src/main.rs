@@ -49,30 +49,48 @@ fn get_moveset(piece: Piece) -> Moveset {
         Vector2 { x: 1, y: -1 },
     ];
 
-    const KNIGHT_MOVESET : &'static [Vector2; 8] = &[
+    const KNIGHT_MOVESET: &'static [Vector2; 8] = &[
         Vector2 { x: 2, y: 1 },
         Vector2 { x: 1, y: 2 },
-
         Vector2 { x: -2, y: 1 },
         Vector2 { x: -1, y: 2 },
-
         Vector2 { x: 2, y: -1 },
         Vector2 { x: 1, y: -2 },
-
         Vector2 { x: -2, y: -1 },
         Vector2 { x: -1, y: -2 },
     ];
 
-    const EMPTY_MOVESET : &'static [Vector2; 0] = &[];
+    const EMPTY_MOVESET: &'static [Vector2; 0] = &[];
 
     match piece {
-        Piece::None => Moveset { regular_moves: EMPTY_MOVESET, inf_moves: EMPTY_MOVESET },
-        Piece::Pawn => Moveset { regular_moves: EMPTY_MOVESET, inf_moves: EMPTY_MOVESET },
-        Piece::Knight => Moveset  { regular_moves : KNIGHT_MOVESET, inf_moves: EMPTY_MOVESET },
-        Piece::Bishop => Moveset  { regular_moves : EMPTY_MOVESET, inf_moves: DIAGONAL_MOVESET },
-        Piece::Rook => Moveset  { regular_moves : EMPTY_MOVESET, inf_moves: HORIZONTAL_MOVESET },
-        Piece::Queen => Moveset { regular_moves : EMPTY_MOVESET, inf_moves: BOTH_MOVESET },
-        Piece::King => Moveset { regular_moves : BOTH_MOVESET, inf_moves: EMPTY_MOVESET },
+        Piece::None => Moveset {
+            regular_moves: EMPTY_MOVESET,
+            inf_moves: EMPTY_MOVESET,
+        },
+        Piece::Pawn => Moveset {
+            regular_moves: EMPTY_MOVESET,
+            inf_moves: EMPTY_MOVESET,
+        },
+        Piece::Knight => Moveset {
+            regular_moves: KNIGHT_MOVESET,
+            inf_moves: EMPTY_MOVESET,
+        },
+        Piece::Bishop => Moveset {
+            regular_moves: EMPTY_MOVESET,
+            inf_moves: DIAGONAL_MOVESET,
+        },
+        Piece::Rook => Moveset {
+            regular_moves: EMPTY_MOVESET,
+            inf_moves: HORIZONTAL_MOVESET,
+        },
+        Piece::Queen => Moveset {
+            regular_moves: EMPTY_MOVESET,
+            inf_moves: BOTH_MOVESET,
+        },
+        Piece::King => Moveset {
+            regular_moves: BOTH_MOVESET,
+            inf_moves: EMPTY_MOVESET,
+        },
     }
 }
 
@@ -112,7 +130,7 @@ struct Castle {
 }
 
 /** 0,0 is the top left; 8,8 is the bottom right */
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 struct Position {
     x: usize,
     y: usize,
@@ -420,34 +438,144 @@ enum MoveFlags {
     Tie,
 }
 
-fn move_piece(game: &mut Game, move_start: Position, move_end: Position) -> HashSet<MoveFlags> {
-    let mut flags: HashSet<MoveFlags> = HashSet::new();
+fn get_position(pos: &Position, offset: &Vector2) -> Option<Position> {
+    let new_position = Vector2 {
+        x: pos.x as i8 + offset.x,
+        y: pos.y as i8 + offset.y,
+    };
 
+    if new_position.x < 0
+        || new_position.y < 0
+        || new_position.x >= BOARD_SIZE as i8
+        || new_position.y >= BOARD_SIZE as i8
+    {
+        return None;
+    }
+
+    Some(Position {
+        x: new_position.x as usize,
+        y: new_position.y as usize,
+    })
+}
+
+fn generate_all_moves(game: &Game, piece_position: &Position) -> HashSet<Position> {
+    let mut all_positions: HashSet<Position> = HashSet::new();
+
+    let start_piece = game.board[piece_position.x][piece_position.y];
+    if start_piece.piece == Piece::None {
+        return all_positions;
+    } else {
+        if start_piece.piece == Piece::Pawn {
+            //todo pawn logic
+        } else {
+            let moveset = get_moveset(start_piece.piece);
+
+            // Goes though all jumps
+            for r_move in moveset.regular_moves {
+                let new_piece_position = get_position(piece_position, r_move);
+
+                // check if valid
+                if new_piece_position.is_none() {
+                    continue;
+                }
+
+                let new_valid_position = new_piece_position.unwrap();
+                if is_valid_capture(&game, &new_valid_position, start_piece.is_white) {
+                    all_positions.insert(new_valid_position);
+                }
+            }
+
+            // Goes though all inf move directions
+            for i_move in moveset.inf_moves {
+                let mut index = 0;
+                loop {
+                    index += 1;
+                    let new_move = Vector2 {
+                        x: i_move.x * index,
+                        y: i_move.y * index,
+                    };
+                    println!("{} , {}", new_move.x, new_move.y);
+                    let new_piece_position = get_position(piece_position, &new_move);
+
+                    // check if valid
+                    if new_piece_position.is_none() {
+                        break;
+                    }
+
+                    let new_valid_position = new_piece_position.unwrap();
+                    if is_valid_capture(&game, &new_valid_position, start_piece.is_white) {
+                        all_positions.insert(new_valid_position);
+                        // break if the piece is of another color, because the pawn cant ghost though pieces
+                        let capture_piece = game.board[new_valid_position.x][new_valid_position.y];
+                        if capture_piece.piece != Piece::None && (capture_piece.is_white != start_piece.is_white) {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    all_positions
+}
+
+fn is_valid_capture(game: &Game, move_end: &Position, is_white: bool) -> bool {
+    let capture_piece = game.board[move_end.x][move_end.y];
+
+    // cant capture own colora
+    if capture_piece.piece != Piece::None && (capture_piece.is_white == is_white) {
+        return false;
+    }
+
+    true
+}
+
+/** basic move check */
+fn is_valid_move(game: &Game, move_start: &Position, move_end: &Position) -> bool {
     if move_start.x >= BOARD_SIZE
         || move_start.y >= BOARD_SIZE
         || move_end.x >= BOARD_SIZE
         || move_end.y >= BOARD_SIZE
         || move_start == move_end
     {
-        flags.insert(MoveFlags::Invalid);
-        return flags;
+        return false;
     }
 
     let start_piece = game.board[move_start.x][move_start.y];
 
     // start peice is invalid
     if (start_piece.is_white != game.is_white_to_move) || start_piece.piece == Piece::None {
-        flags.insert(MoveFlags::Invalid);
-        return flags;
+        return false;
     }
-
-    let capture_piece = game.board[move_end.x][move_end.y];
 
     // cant capture own color
-    if capture_piece.piece != Piece::None && (capture_piece.is_white == game.is_white_to_move) {
+    if !is_valid_capture(&game, move_end, game.is_white_to_move) {
+        return false;
+    }
+
+    true
+}
+
+fn move_piece(game: &mut Game, move_start: &Position, move_end: &Position) -> HashSet<MoveFlags> {
+    let mut flags: HashSet<MoveFlags> = HashSet::new();
+
+    // basic check first
+    if !is_valid_move(game, move_start, move_end) {
         flags.insert(MoveFlags::Invalid);
         return flags;
     }
+
+    // advanced check
+    let all_valid_moves = generate_all_moves(&game, move_start);
+    if !all_valid_moves.contains(move_end) {
+        flags.insert(MoveFlags::Invalid);
+        return flags;
+    }
+
+    let start_piece = game.board[move_start.x][move_start.y];
+    let capture_piece = game.board[move_end.x][move_end.y];
 
     if capture_piece.piece != Piece::None {
         flags.insert(MoveFlags::Capture);
@@ -513,7 +641,7 @@ fn main() {
     println!("==================================");
 
     let mut game =
-        get_board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap();
+        get_board("rnbqkbnr/pppppppp/RNBQKBNR/8/8/8/8/8/ w KQkq - 0 1".to_string()).unwrap();
 
     loop {
         /*let mut highlight = HashSet::new();
@@ -522,8 +650,9 @@ fn main() {
             piece: Piece::Pawn,
             is_white: false,
         };*/
-
-        render(&game);
+        let moves = generate_all_moves(&game, &Position { x: 1, y: 2 });
+        render_highlight(&game, &moves, Color::Red);
+        //render(&game);
 
         //render_highlight(&game, &highlight, Color::Red);
 
@@ -535,7 +664,7 @@ fn main() {
         }
         let parsed_move = input_move.unwrap();
 
-        let move_data = move_piece(&mut game, parsed_move.0, parsed_move.1);
+        let move_data = move_piece(&mut game, &parsed_move.0, &parsed_move.1);
         if move_data.contains(&MoveFlags::Invalid) {
             println!("Invalid Move");
             continue;
