@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     io::{self, Write},
 };
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
@@ -9,8 +9,72 @@ const WHITE_PICES: [&str; 6] = ["♙", "♘", "♗", "♖", "♕", "♔"];
 const BLACK_PICES: [&str; 6] = ["♟", "♞", "♝", "♜", "♛", "♚"];
 const ALPHABET: [&str; BOARD_SIZE] = ["a", "b", "c", "d", "e", "f", "g", "h"];
 const REVERSE_BOARD_ON_SWITCH: bool = false;
-
 const BOARD_SIZE: usize = 8;
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+struct Vector2 {
+    x: i8,
+    y: i8,
+}
+
+struct Moveset {
+    regular_moves: &'static [Vector2],
+    inf_moves: &'static [Vector2],
+}
+
+/** GET MOVESET, WONT WORK FOR PAWN */
+fn get_moveset(piece: Piece) -> Moveset {
+    const DIAGONAL_MOVESET: &'static [Vector2; 4] = &[
+        Vector2 { x: 1, y: 1 },
+        Vector2 { x: -1, y: -1 },
+        Vector2 { x: -1, y: 1 },
+        Vector2 { x: 1, y: -1 },
+    ];
+
+    const HORIZONTAL_MOVESET: &'static [Vector2; 4] = &[
+        Vector2 { x: 0, y: 1 },
+        Vector2 { x: 0, y: -1 },
+        Vector2 { x: -1, y: 0 },
+        Vector2 { x: 1, y: 0 },
+    ];
+
+    const BOTH_MOVESET: &'static [Vector2; 8] = &[
+        Vector2 { x: 0, y: 1 },
+        Vector2 { x: 0, y: -1 },
+        Vector2 { x: -1, y: 0 },
+        Vector2 { x: 1, y: 0 },
+        Vector2 { x: 1, y: 1 },
+        Vector2 { x: -1, y: -1 },
+        Vector2 { x: -1, y: 1 },
+        Vector2 { x: 1, y: -1 },
+    ];
+
+    const KNIGHT_MOVESET : &'static [Vector2; 8] = &[
+        Vector2 { x: 2, y: 1 },
+        Vector2 { x: 1, y: 2 },
+
+        Vector2 { x: -2, y: 1 },
+        Vector2 { x: -1, y: 2 },
+
+        Vector2 { x: 2, y: -1 },
+        Vector2 { x: 1, y: -2 },
+
+        Vector2 { x: -2, y: -1 },
+        Vector2 { x: -1, y: -2 },
+    ];
+
+    const EMPTY_MOVESET : &'static [Vector2; 0] = &[];
+
+    match piece {
+        Piece::None => Moveset { regular_moves: EMPTY_MOVESET, inf_moves: EMPTY_MOVESET },
+        Piece::Pawn => Moveset { regular_moves: EMPTY_MOVESET, inf_moves: EMPTY_MOVESET },
+        Piece::Knight => Moveset  { regular_moves : KNIGHT_MOVESET, inf_moves: EMPTY_MOVESET },
+        Piece::Bishop => Moveset  { regular_moves : EMPTY_MOVESET, inf_moves: DIAGONAL_MOVESET },
+        Piece::Rook => Moveset  { regular_moves : EMPTY_MOVESET, inf_moves: HORIZONTAL_MOVESET },
+        Piece::Queen => Moveset { regular_moves : EMPTY_MOVESET, inf_moves: BOTH_MOVESET },
+        Piece::King => Moveset { regular_moves : BOTH_MOVESET, inf_moves: EMPTY_MOVESET },
+    }
+}
 
 fn get_char(piece: Piece, is_white: bool) -> &'static str {
     let set = if is_white { WHITE_PICES } else { BLACK_PICES };
@@ -81,18 +145,22 @@ struct Game {
 
 fn clear_terminal_color(text: &str) {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
-    stdout.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+    stdout
+        .set_color(ColorSpec::new().set_fg(Some(Color::White)))
+        .unwrap();
     write!(&mut stdout, "{}", text).unwrap();
 }
 
 fn print_piece(text: &str, fg_color: Color, bg_color: Color) {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
-    stdout.set_color(
-        ColorSpec::new()
-            .set_bold(true)
-            .set_fg(Some(fg_color))
-            .set_bg(Some(bg_color)),
-    ).unwrap();
+    stdout
+        .set_color(
+            ColorSpec::new()
+                .set_bold(true)
+                .set_fg(Some(fg_color))
+                .set_bg(Some(bg_color)),
+        )
+        .unwrap();
 
     write!(&mut stdout, " {}  ", text).unwrap();
 }
