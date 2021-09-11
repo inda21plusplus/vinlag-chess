@@ -47,13 +47,15 @@ struct Castle {
     can_castle_queen_side: bool,
 }
 
-#[derive(PartialEq)]
+/** 0,0 is the top left; 8,8 is the bottom right */
+#[derive(PartialEq, Eq, Hash)]
 struct Position {
     x: usize,
     y: usize,
 }
 
 struct Game {
+    /** 0,0 is the top left; 8,8 is the bottom right */
     board: [[PieceData; BOARD_SIZE]; BOARD_SIZE],
 
     white_castle: Castle,
@@ -77,60 +79,72 @@ struct Game {
     full_move_clock: u16,
 }
 
-fn clear_terminal_color(text: &str) -> io::Result<()> {
+fn clear_terminal_color(text: &str) {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
-    stdout.set_color(ColorSpec::new().set_fg(Some(Color::White)))?;
-    write!(&mut stdout, "{}", text)
+    stdout.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+    write!(&mut stdout, "{}", text).unwrap();
 }
 
-fn change_terminal_colors(text: &str, is_white: bool, is_dark: bool) -> io::Result<()> {
+fn print_piece(text: &str, fg_color: Color, bg_color: Color) {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
     stdout.set_color(
         ColorSpec::new()
             .set_bold(true)
-            .set_fg(if is_white {
-                Some(Color::White)
-            } else {
-                Some(Color::Rgb(150, 150, 150)) // Some(Color::Black)  //Some(Color::Rgb(150,150,150))
-            })
-            .set_bg(if is_dark {
-                Some(Color::Rgb(24, 26, 27)) // Some(Color::Rgb(233,159,75)) //Some(Color::Rgb(24, 26, 27))
-            } else {
-                Some(Color::Rgb(49, 53, 55)) // Some(Color::Rgb(171, 113, 59)) //Some(Color::Rgb(49, 53, 55))
-            }),
-    )?;
+            .set_fg(Some(fg_color))
+            .set_bg(Some(bg_color)),
+    ).unwrap();
 
-    write!(&mut stdout, " {}  ", text)
+    write!(&mut stdout, " {}  ", text).unwrap();
 }
 
 fn render(game: &Game) {
+    render_highlight(game, &HashSet::new(), Color::Red);
+}
+
+fn render_highlight(game: &Game, highlight: &HashSet<Position>, highlight_color: Color) {
     let is_inverted = REVERSE_BOARD_ON_SWITCH && !game.is_white_to_move;
 
     for y in 0..BOARD_SIZE {
-        let display_y = if is_inverted { y + 1 } else { BOARD_SIZE - y };
+        let display_y = if is_inverted { BOARD_SIZE - y } else { y + 1 };
 
-        clear_terminal_color("").unwrap();
-        print!("{} ", display_y);
+        clear_terminal_color("");
+        print!("{} ", BOARD_SIZE - y);
         for x in 0..BOARD_SIZE {
-            let display_x = if is_inverted { x + 1 } else { BOARD_SIZE - x };
+            let display_x = if is_inverted { BOARD_SIZE - x } else { x + 1 };
 
             let piece_data = game.board[display_x - 1][display_y - 1];
 
-            change_terminal_colors(
+            let fg_color = if piece_data.is_white {
+                Color::White
+            } else {
+                Color::Rgb(150, 150, 150) // Some(Color::Black)  //Some(Color::Rgb(150,150,150))
+            };
+
+            let bg_color = if highlight.contains(&Position { x, y }) {
+                highlight_color
+            } else {
+                let is_dark_square = (display_y + display_x) % 2 == 0;
+
+                if is_dark_square {
+                    Color::Rgb(24, 26, 27) // Some(Color::Rgb(233,159,75)) //Some(Color::Rgb(24, 26, 27))
+                } else {
+                    Color::Rgb(49, 53, 55) // Some(Color::Rgb(171, 113, 59)) //Some(Color::Rgb(49, 53, 55))
+                }
+            };
+            print_piece(
                 get_char(piece_data.piece, piece_data.is_white),
-                piece_data.is_white,
-                (display_y + display_x) % 2 == 0,
-            )
-            .unwrap();
+                fg_color,
+                bg_color,
+            );
         }
-        clear_terminal_color("\r\n").unwrap();
+        clear_terminal_color("\r\n");
     }
     print!("");
     for x in 0..BOARD_SIZE {
         print!("  {} ", ALPHABET[x]);
     }
 
-    clear_terminal_color("\r\n\r\n").unwrap();
+    clear_terminal_color("\r\n\r\n");
 }
 
 fn parse_piece(input: char) -> Option<PieceData> {
@@ -232,7 +246,7 @@ fn get_board(fen_string: String) -> Option<Game> {
             board_x += number.unwrap() as usize;
         } else {
             // is piece
-            board[BOARD_SIZE - board_x - 1][BOARD_SIZE - board_y - 1] = piece.unwrap();
+            board[board_x][board_y] = piece.unwrap();
             board_x += 1;
         }
     }
@@ -294,8 +308,8 @@ fn parse_position(input: &str) -> Option<Position> {
         return None;
     }
 
-    const BOARD_X_INPUT: [char; BOARD_SIZE] = ['h', 'g', 'f', 'e', 'd', 'c', 'b', 'a'];
-    const BOARD_Y_INPUT: [char; BOARD_SIZE] = ['1', '2', '3', '4', '5', '6', '7', '8'];
+    const BOARD_X_INPUT: [char; BOARD_SIZE] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const BOARD_Y_INPUT: [char; BOARD_SIZE] = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
     let x = BOARD_X_INPUT.iter().position(|&c| c == chars[0]);
     let y = BOARD_Y_INPUT.iter().position(|&c| c == chars[1]);
@@ -396,9 +410,9 @@ fn move_piece(game: &mut Game, move_start: Position, move_end: Position) -> Hash
     game.is_white_to_move = !game.is_white_to_move;
 
     // 50 move rule
-    if half_move_clock >= 50 {
-        flags.remove(&MoveFlags::BlackWon);
-        flags.remove(&MoveFlags::WhiteWon);
+    if half_move_clock >= 50
+        && !(flags.contains(&MoveFlags::BlackWon) || flags.contains(&MoveFlags::WhiteWon))
+    {
         flags.insert(MoveFlags::Tie);
     }
 
@@ -434,7 +448,17 @@ fn main() {
         get_board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1".to_string()).unwrap();
 
     loop {
+        /*let mut highlight = HashSet::new();
+        highlight.insert(Position { x: 0, y: 0 });
+        game.board[0][0] = PieceData {
+            piece: Piece::Pawn,
+            is_white: false,
+        };*/
+
         render(&game);
+
+        //render_highlight(&game, &highlight, Color::Red);
+
         let input = read_input();
         let input_move = parse_move(&input);
         if input_move.is_none() {
