@@ -1,9 +1,82 @@
-use std::{
-    collections::{HashMap, HashSet},
-    io::{self, Write},
-    option,
-};
+use std::{collections::HashSet, io::Write};
+
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    fn load_board(board: &str, moves: Vec<&str>) -> Option<(String, HashSet<MoveFlags>)> {
+        let mut game = match get_board(board.to_string()) {
+            Some(gm) => gm,
+            None => return None,
+        };
+
+        let mut last_flags = HashSet::new();
+        last_flags.insert(MoveFlags::Valid);
+
+        for input in moves {
+            let pos = match parse_move(&input) {
+                Some(t) => t,
+                None => return None,
+            };
+            let flags = move_piece(&mut game, &pos.0, &pos.1, true);
+            last_flags = flags;
+            if last_flags.contains(&MoveFlags::Invalid) {
+                break;
+            }
+        }
+        //let flags = last_flags.iter().map(|s| => s).coll;
+        return Some((
+            match print_board(&game) {
+                Some(str) => str,
+                None => return None,
+            },
+            last_flags,
+        ));
+    }
+
+    const STANDARD_BOARD : &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+    #[test]
+    fn fen_test_no_castle() {
+        let str = "rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5";
+        assert_eq!(str, load_board(str, Vec::new()).unwrap().0);
+    }
+
+    #[test]
+    fn fen_test_one_castle() {
+        let str = "rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 b kq - 3 5";
+        let q = load_board(str, Vec::new());
+        assert_eq!(str, q.unwrap().0);
+    }
+
+    #[test]
+    fn fen_test_both_castle() {
+        let str = "rnbq1rk1/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 w - - 4 6";
+        assert_eq!(str, load_board(str, Vec::new()).unwrap().0);
+    }
+
+    #[test]
+    fn simple_move() {
+        let str = STANDARD_BOARD;
+        assert_eq!("rnbqkbnr/ppppp1pp/8/5P2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 0 2", load_board(str, vec!["e2e4","f7f5","e4f5"]).unwrap().0);
+    }
+
+    #[test]
+    fn simple_invalid() {
+        let str = STANDARD_BOARD;
+        let board = load_board(str, vec!["e1e2"]).unwrap();
+        assert_eq!(str, board.0);
+        assert_eq!(true, board.1.contains(&MoveFlags::Invalid));
+    }
+
+    #[test]
+    fn clock_test() {
+        let str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        assert_eq!("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4 3", load_board(str, vec!["b1c3","b8c6","c3b1","c6b8"]).unwrap().0);
+    }
+}
 
 // ONLY USED FOR RENDER
 const WHITE_PICES: [&str; 6] = ["♙", "♘", "♗", "♖", "♕", "♔"];
@@ -21,6 +94,101 @@ const EMPTY_PEICE: PieceData = PieceData {
     piece: Piece::None,
     is_white: false,
 };
+
+const EMPTY_CASTLE: Castle = Castle {
+    can_castle_king_side: false,
+    can_castle_queen_side: false,
+};
+
+// logic
+const BOARD_X_INPUT: [char; BOARD_SIZE] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+const BOARD_Y_INPUT: [char; BOARD_SIZE] = ['8', '7', '6', '5', '4', '3', '2', '1'];
+const CHAR_TO_PIECE_MAP: [(char, PieceData); 12] = [
+    (
+        'p',
+        PieceData {
+            piece: Piece::Pawn,
+            is_white: false,
+        },
+    ),
+    (
+        'n',
+        PieceData {
+            piece: Piece::Knight,
+            is_white: false,
+        },
+    ),
+    (
+        'b',
+        PieceData {
+            piece: Piece::Bishop,
+            is_white: false,
+        },
+    ),
+    (
+        'r',
+        PieceData {
+            piece: Piece::Rook,
+            is_white: false,
+        },
+    ),
+    (
+        'q',
+        PieceData {
+            piece: Piece::Queen,
+            is_white: false,
+        },
+    ),
+    (
+        'k',
+        PieceData {
+            piece: Piece::King,
+            is_white: false,
+        },
+    ),
+    (
+        'P',
+        PieceData {
+            piece: Piece::Pawn,
+            is_white: true,
+        },
+    ),
+    (
+        'N',
+        PieceData {
+            piece: Piece::Knight,
+            is_white: true,
+        },
+    ),
+    (
+        'B',
+        PieceData {
+            piece: Piece::Bishop,
+            is_white: true,
+        },
+    ),
+    (
+        'R',
+        PieceData {
+            piece: Piece::Rook,
+            is_white: true,
+        },
+    ),
+    (
+        'Q',
+        PieceData {
+            piece: Piece::Queen,
+            is_white: true,
+        },
+    ),
+    (
+        'K',
+        PieceData {
+            piece: Piece::King,
+            is_white: true,
+        },
+    ),
+];
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 struct Vector2 {
@@ -129,7 +297,7 @@ enum Piece {
     King,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 struct PieceData {
     piece: Piece,
     is_white: bool,
@@ -244,59 +412,109 @@ fn render_highlight(game: &Game, highlight: &HashSet<Position>, highlight_color:
     clear_terminal_color("\r\n\r\n");
 }
 
-fn parse_piece(input: char) -> Option<PieceData> {
-    match input {
-        'p' => Some(PieceData {
-            piece: Piece::Pawn,
-            is_white: false,
-        }),
-        'n' => Some(PieceData {
-            piece: Piece::Knight,
-            is_white: false,
-        }),
-        'b' => Some(PieceData {
-            piece: Piece::Bishop,
-            is_white: false,
-        }),
-        'r' => Some(PieceData {
-            piece: Piece::Rook,
-            is_white: false,
-        }),
-        'q' => Some(PieceData {
-            piece: Piece::Queen,
-            is_white: false,
-        }),
-        'k' => Some(PieceData {
-            piece: Piece::King,
-            is_white: false,
-        }),
-
-        'P' => Some(PieceData {
-            piece: Piece::Pawn,
-            is_white: true,
-        }),
-        'N' => Some(PieceData {
-            piece: Piece::Knight,
-            is_white: true,
-        }),
-        'B' => Some(PieceData {
-            piece: Piece::Bishop,
-            is_white: true,
-        }),
-        'R' => Some(PieceData {
-            piece: Piece::Rook,
-            is_white: true,
-        }),
-        'Q' => Some(PieceData {
-            piece: Piece::Queen,
-            is_white: true,
-        }),
-        'K' => Some(PieceData {
-            piece: Piece::King,
-            is_white: true,
-        }),
-        _ => None,
+fn get_piece(piece_data: PieceData) -> Option<char> {
+    for value in CHAR_TO_PIECE_MAP {
+        if value.1 == piece_data {
+            return Some(value.0);
+        }
     }
+    None
+}
+
+fn parse_piece(input: char) -> Option<PieceData> {
+    for value in CHAR_TO_PIECE_MAP {
+        if value.0 == input {
+            return Some(value.1);
+        }
+    }
+    None
+}
+
+/** Forsyth–Edwards Notation https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
+start board for standard chess is rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+*/
+fn print_board(game: &Game) -> Option<String> {
+    let mut output: String = String::new();
+
+    // generate board
+    for y in 0..BOARD_SIZE {
+        let mut last_piece: u8 = 0;
+        for x in 0..BOARD_SIZE {
+            let piece_data = game.board[x][y];
+            if piece_data.piece == Piece::None {
+                last_piece += 1;
+            } else {
+                if last_piece != 0 {
+                    output.push((last_piece + 48u8) as char); // ascci int to char
+                }
+                match get_piece(piece_data) {
+                    Some(s_char) => output.push(s_char),
+                    None => return None,
+                }
+                last_piece = 0
+            }
+        }
+        if last_piece != 0 {
+            output.push((last_piece + 48u8) as char);
+        }
+        if y != BOARD_SIZE - 1 {
+            output.push('/');
+        }
+    }
+
+    // white/black to move
+    output.push(' ');
+    output.push(if game.is_white_to_move { 'w' } else { 'b' });
+    output.push(' ');
+
+    let mut cant_castle = 0;
+
+    // casteling
+    if !game.white_castle.can_castle_king_side && !game.white_castle.can_castle_queen_side {
+        cant_castle += 1;
+    } else {
+        if game.white_castle.can_castle_king_side {
+            output.push('K');
+        }
+        if game.white_castle.can_castle_queen_side {
+            output.push('Q');
+        }
+    }
+
+    if !game.black_castle.can_castle_king_side && !game.black_castle.can_castle_queen_side {
+        cant_castle += 1;
+    } else {
+        if game.black_castle.can_castle_king_side {
+            output.push('k');
+        }
+        if game.black_castle.can_castle_queen_side {
+            output.push('q');
+        }
+    }
+
+    if cant_castle == 2 {
+        output.push('-');
+        output.push(' ');
+    }
+
+    if !output.ends_with(' ') {
+        output.push(' ');
+    }
+
+    if game.en_passant_position.is_some() {
+        let en_passant_position = game.en_passant_position.unwrap();
+        output.push(BOARD_X_INPUT[en_passant_position.x]);
+        output.push(BOARD_Y_INPUT[en_passant_position.y]);
+    } else {
+        output.push('-');
+    }
+    output.push(' ');
+
+    output += &game.half_move_clock.to_string();
+    output.push(' ');
+    output += &game.full_move_clock.to_string();
+
+    Some(output)
 }
 
 /** Forsyth–Edwards Notation https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
@@ -351,19 +569,27 @@ fn get_board(fen_string: String) -> Option<Game> {
     //castle
     let casle_chars: Vec<char> = split[2].chars().collect(); //.chars();
 
-    //invalid input
-    if casle_chars.len() != 4 {
-        return None;
-    }
+    let mut white_castle = EMPTY_CASTLE;
+    let mut black_castle = EMPTY_CASTLE;
 
-    let white_castle = Castle {
-        can_castle_king_side: casle_chars[0] != '-',
-        can_castle_queen_side: casle_chars[1] != '-',
-    };
-    let black_castle = Castle {
-        can_castle_king_side: casle_chars[2] != '-',
-        can_castle_queen_side: casle_chars[3] != '-',
-    };
+    //todo fix
+    for casle_char in casle_chars {
+        match casle_char {
+            'K' => {
+                white_castle.can_castle_king_side = true;
+            }
+            'k' => {
+                black_castle.can_castle_king_side = true;
+            }
+            'Q' => {
+                white_castle.can_castle_queen_side = true;
+            }
+            'q' => {
+                black_castle.can_castle_queen_side = true;
+            }
+            _ => {}
+        };
+    }
 
     let en_passant_position = None::<Position>; //TODO FIX split[3]
 
@@ -401,9 +627,6 @@ fn parse_position(input: &str) -> Option<Position> {
     if chars.len() != 2 {
         return None;
     }
-
-    const BOARD_X_INPUT: [char; BOARD_SIZE] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-    const BOARD_Y_INPUT: [char; BOARD_SIZE] = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
     let x = BOARD_X_INPUT.iter().position(|&c| c == chars[0]);
     let y = BOARD_Y_INPUT.iter().position(|&c| c == chars[1]);
@@ -784,16 +1007,11 @@ fn try_castle(game: &mut Game, move_start: &Position, move_end: &Position) -> bo
                                 // clears old king
                                 game.board[move_start.x][move_start.y] = EMPTY_PEICE;
 
-                                let empty_castle = Castle {
-                                    can_castle_king_side: false,
-                                    can_castle_queen_side: false,
-                                };
-
                                 // removes the has castled
                                 if is_white {
-                                    game.white_castle = empty_castle;
+                                    game.white_castle = EMPTY_CASTLE;
                                 } else {
-                                    game.black_castle = empty_castle;
+                                    game.black_castle = EMPTY_CASTLE;
                                 }
 
                                 return true;
@@ -890,7 +1108,7 @@ fn move_piece(
                     } else {
                         game.black_castle.can_castle_queen_side = false;
                     }
-                } else if move_start.x == BOARD_SIZE-1 {
+                } else if move_start.x == BOARD_SIZE - 1 {
                     if is_white {
                         game.white_castle.can_castle_king_side = false;
                     } else {
@@ -975,8 +1193,21 @@ fn main() {
     //std::process::Command::new("cls");
     println!("==================================");
 
+    //both castle
+    //rnbq1rk1/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 w - - 4 6
+
+    // one castle
+    //rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 b kq - 3 5
+
+    // no castle
+    // rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5
+
     let mut game =
-        get_board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1".to_string()).unwrap();
+        get_board("rnbq1rk1/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 w - - 4 6".to_string())
+            .unwrap();
+
+    let game_print = print_board(&game);
+    println!("{}", game_print.unwrap());
 
     loop {
         /*let mut highlight = HashSet::new();
