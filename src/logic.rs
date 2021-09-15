@@ -1,4 +1,3 @@
-
 use std::collections::HashSet;
 
 use crate::game_data::*;
@@ -32,13 +31,24 @@ fn is_square_color(game: &Game, piece_position: &Position, is_white: bool) -> bo
     return piece_data.piece != Piece::None && piece_data.is_white == is_white;
 }
 
-/** Excludes casteling to not make an while true loop while */
-pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> HashSet<Position> {
+/**
+Excludes casteling to not make an while true loop while
+first is all direct attacks
+second is all attacks with 1 piece blocking
+third is all direct threats to the king
+*/
+pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> ThreatMap {
     let mut all_positions: HashSet<Position> = HashSet::new();
+    let mut all_secondary_positions: HashSet<Position> = HashSet::new();
+    let mut all_king_positions: HashSet<Position> = HashSet::new();
 
     let start_piece = game.board[piece_position.x][piece_position.y];
     if start_piece.piece == Piece::None {
-        return all_positions;
+        return ThreatMap {
+            all_threats: all_positions,
+            all_threats_secondary: all_secondary_positions,
+            all_king_threats: all_king_positions,
+        };
     } else {
         // special case for pawns because they have so many rules
         if start_piece.piece == Piece::Pawn {
@@ -103,6 +113,11 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Hash
                 {
                     all_positions.insert(new_valid_position);
                 } else if is_square_color(game, &new_valid_position, !start_piece.is_white) {
+                    // aka is about to capture the king
+                    if game.board[new_valid_position.x][new_valid_position.y].piece == Piece::King {
+                        all_king_positions.insert(new_valid_position);
+                        all_king_positions.insert(*piece_position);
+                    }
                     all_positions.insert(new_valid_position);
                 }
             }
@@ -116,7 +131,12 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Hash
                     None => continue,
                 };
 
-                if is_valid_capture(&game, &new_valid_position, start_piece.is_white) {
+                if !is_square_color(&game, &new_valid_position, start_piece.is_white) {
+                    //aka is about to capture the king
+                    if game.board[new_valid_position.x][new_valid_position.y].piece == Piece::King {
+                        all_king_positions.insert(new_valid_position);
+                        all_king_positions.insert(*piece_position);
+                    }
                     all_positions.insert(new_valid_position);
                 }
             }
@@ -124,6 +144,9 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Hash
             // Goes though all inf move directions
             for i_move in moveset.inf_moves {
                 let mut index = 0;
+                // 0 means direct attacks, 1 means attacks that jump over 1 piece
+                let mut ghost_index = 0;
+                let mut local_line: HashSet<Position> = HashSet::new();
                 loop {
                     index += 1;
                     let new_move = Vector2 {
@@ -136,14 +159,39 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Hash
                         None => break,
                     };
 
-                    if is_valid_capture(&game, &new_valid_position, start_piece.is_white) {
-                        all_positions.insert(new_valid_position);
+                    local_line.insert(new_valid_position);
+
+                    // if not the same color
+                    if !is_square_color(&game, &new_valid_position, start_piece.is_white) {
+                        if ghost_index == 0 {
+                            all_positions.insert(new_valid_position);
+                        }
+
                         // break if the piece is of another color, because the pawn cant ghost though pieces
                         let capture_piece = game.board[new_valid_position.x][new_valid_position.y];
                         if capture_piece.piece != Piece::None
                             && (capture_piece.is_white != start_piece.is_white)
                         {
-                            break;
+                            // as we are only intrested in the first 2 or king, the rest can go
+                            if capture_piece.piece == Piece::King {
+                                if ghost_index == 0 {
+                                    // if something threatens the king, then a valid move is to capture that piece
+                                    all_king_positions.insert(*piece_position);
+                                    for l_move in local_line {
+                                        all_king_positions.insert(l_move);
+                                    }
+                                } else if ghost_index == 1 {
+                                    for l_move in local_line {
+                                        all_secondary_positions.insert(l_move);
+                                    }
+                                }
+                                break;
+                            }
+
+                            ghost_index += 1;
+                            if ghost_index >= 2 {
+                                break;
+                            }
                         }
                     } else {
                         break;
@@ -153,16 +201,11 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Hash
         }
     }
 
-    all_positions
-}
-
-fn is_valid_capture(game: &Game, move_end: &Position, is_white: bool) -> bool {
-    // cant capture own color
-    if is_square_color(game, move_end, is_white) {
-        return false;
+    ThreatMap {
+        all_threats: all_positions,
+        all_threats_secondary: all_secondary_positions,
+        all_king_threats: all_king_positions,
     }
-
-    true
 }
 
 /** basic move check */
@@ -184,7 +227,7 @@ fn is_valid_move(game: &Game, move_start: &Position, move_end: &Position) -> boo
     }
 
     // cant capture own color
-    if !is_valid_capture(&game, move_end, game.is_white_to_move) {
+    if is_square_color(&game, move_end, game.is_white_to_move) {
         return false;
     }
 
@@ -228,21 +271,33 @@ pub fn promote_pawn(game: &mut Game, promotion: Piece) -> bool {
 }
 
 /** Includes all threat positions generate by that team */
-fn generate_all_threats(game: &Game, is_white: bool) -> HashSet<Position> {
+pub fn generate_all_threats(game: &Game, is_white: bool) -> ThreatMap {
     let mut all_threats: HashSet<Position> = HashSet::new();
+    let mut all_threats_secondary: HashSet<Position> = HashSet::new();
+    let mut all_king_threats: HashSet<Position> = HashSet::new();
     for x in 0..BOARD_SIZE {
         for y in 0..BOARD_SIZE {
             let position = Position { x, y };
             if is_square_color(game, &position, is_white) {
                 let piece_threads = generate_all_moves(game, &position);
-                for t_pos in piece_threads {
+                for t_pos in piece_threads.all_threats {
                     all_threats.insert(t_pos);
+                }
+                for t_pos in piece_threads.all_threats_secondary {
+                    all_threats_secondary.insert(t_pos);
+                }
+                for t_pos in piece_threads.all_king_threats {
+                    all_king_threats.insert(t_pos);
                 }
             }
         }
     }
 
-    all_threats
+    ThreatMap {
+        all_threats: all_threats,
+        all_threats_secondary: all_threats_secondary,
+        all_king_threats: all_king_threats,
+    }
 }
 
 fn find_king(game: &Game, is_white: bool) -> Option<Position> {
@@ -257,32 +312,42 @@ fn find_king(game: &Game, is_white: bool) -> Option<Position> {
     None
 }
 
-/**Returns true if castle is successful */
-fn try_castle(game: &mut Game, move_start: &Position, move_end: &Position) -> bool {
-    let is_white = game.is_white_to_move;
-    let start_piece = game.board[move_start.x][move_start.y];
+fn get_castle_positions(
+    game: &Game,
+    piece_position: &Position,
+    is_white: bool,
+) -> HashSet<Position> {
+    let mut moves = HashSet::new();
 
-    // castle
     let castle_status = if is_white {
-        &game.white_castle
+        &game.castle[0]
     } else {
-        &game.white_castle
+        &game.castle[1]
     };
+
+    let piece_data = game.board[piece_position.x][piece_position.y];
+
+    // has no king... how? or cant castle
+    if piece_data.is_white != is_white
+        || piece_data.piece != Piece::King
+        || (!castle_status.can_castle_king_side && !castle_status.can_castle_queen_side)
+    {
+        return moves;
+    }
 
     // be aware that you can trick this by adding a second rook because
     // it only keeps track of the first rook on the left or right side
-    if start_piece.piece == Piece::King
-        && (castle_status.can_castle_king_side || castle_status.can_castle_queen_side)
-    {
-        let spawn_y = if is_white { WHITE_SPAWN } else { BLACK_SPAWN };
+    let spawn_y = if is_white { WHITE_SPAWN } else { BLACK_SPAWN };
 
-        // right y pos
-        if spawn_y == move_start.y {
-            let other_threats = generate_all_threats(game, !is_white);
+    // right y pos
+    if spawn_y == piece_position.y {
+        let other_threats = generate_all_threats(game, !is_white);
 
-            // king cant castle if checked
-            if !other_threats.contains(move_start) {
-                let is_king_side = move_end.x > move_start.x;
+        // king cant castle if checked
+        const KING_SIDES: [i8; 2] = [-1, 1];
+        for offset in KING_SIDES {
+            if !other_threats.all_king_threats.contains(piece_position) {
+                let is_king_side = offset > 0;
 
                 // if can castle
                 if if is_king_side {
@@ -290,12 +355,15 @@ fn try_castle(game: &mut Game, move_start: &Position, move_end: &Position) -> bo
                 } else {
                     castle_status.can_castle_queen_side
                 } {
-                    // what direction is king side
-                    let offset = if is_king_side { 1 } else { -1 };
+                    let rook_pos = if is_king_side {
+                        castle_status.king_side_rook
+                    } else {
+                        castle_status.queen_side_rook
+                    };
 
                     for index in 1..BOARD_SIZE {
                         let new_valid_position = match get_position(
-                            move_start,
+                            piece_position,
                             &Vector2 {
                                 x: (index as i8) * offset,
                                 y: 0,
@@ -306,49 +374,31 @@ fn try_castle(game: &mut Game, move_start: &Position, move_end: &Position) -> bo
                         };
 
                         // the king cant be checked on his way over to the rook,
-                        // this also checks the rook square as an added benift
-                        if other_threats.contains(&new_valid_position) {
+                        // because the king only moves 2 squares, the index is 2
+                        if other_threats.all_king_threats.contains(&new_valid_position)
+                            && index <= 2
+                        {
                             break;
                         }
 
                         let piece_data = game.board[new_valid_position.x][new_valid_position.y];
 
                         // found rook
-                        if piece_data.is_white == is_white && piece_data.piece == Piece::Rook {
-                            let new_rook_position = match get_position(
-                                move_start,
+                        if piece_data.is_white == is_white
+                            && piece_data.piece == Piece::Rook
+                            && new_valid_position == rook_pos
+                        {
+                            let new_valid_king = match get_position(
+                                piece_position,
                                 &Vector2 {
-                                    x: (index as i8 - 2) * offset,
+                                    x: 2i8 * offset,
                                     y: 0,
                                 },
                             ) {
                                 Some(pos) => pos,
                                 None => break,
                             };
-
-                            // if rook position == end move + offset
-                            if new_valid_position.x as i8 == move_end.x as i8 + offset {
-                                // moves rook
-                                game.board[new_rook_position.x][new_rook_position.y] = piece_data;
-                                // moves king
-                                game.board[move_end.x][move_end.y] =
-                                    game.board[move_start.x][move_start.y];
-
-                                // clears old rook
-                                game.board[new_valid_position.x][new_valid_position.y] =
-                                    EMPTY_PEICE;
-                                // clears old king
-                                game.board[move_start.x][move_start.y] = EMPTY_PEICE;
-
-                                // removes the has castled
-                                if is_white {
-                                    game.white_castle = EMPTY_CASTLE;
-                                } else {
-                                    game.black_castle = EMPTY_CASTLE;
-                                }
-
-                                return true;
-                            }
+                            moves.insert(new_valid_king);
                         } else if piece_data.piece != Piece::None {
                             // cant jump over pieces
                             break;
@@ -358,7 +408,114 @@ fn try_castle(game: &mut Game, move_start: &Position, move_end: &Position) -> bo
             }
         }
     }
-    return false;
+    return moves;
+}
+
+pub fn generate_all_moves_and_castle(game: &Game, piece_position: &Position) -> HashSet<Position> {
+    if piece_position.x >= BOARD_SIZE || piece_position.y >= BOARD_SIZE {
+        return HashSet::new();
+    }
+    let mut moves = generate_all_moves(&game, piece_position).all_threats;
+
+    let start_piece = game.board[piece_position.x][piece_position.y];
+    if start_piece.piece == Piece::King {
+        let castle_moves = get_castle_positions(game, piece_position, start_piece.is_white);
+        for c_move in castle_moves {
+            moves.insert(c_move);
+        }
+    }
+
+    return moves;
+}
+
+pub fn generate_valid_moves_for_team(
+    game: &Game,
+    other_team_threat_map: &ThreatMap,
+    is_white: bool,
+) -> HashSet<Position> {
+    let mut map: HashSet<Position> = HashSet::new();
+
+    for x in 0..BOARD_SIZE {
+        for y in 0..BOARD_SIZE {
+            let pos = &Position { x: x, y: y };
+            if is_square_color(game, pos, is_white) {
+                for v_pos in generate_valid_moves(game, other_team_threat_map, pos) {
+                    map.insert(v_pos);
+                }
+            }
+        }
+    }
+    return map;
+}
+
+pub fn generate_valid_moves(
+    game: &Game,
+    other_team_threat_map: &ThreatMap,
+    piece_position: &Position,
+) -> HashSet<Position> {
+    let mut valid_positions: HashSet<Position> = HashSet::new();
+
+    let all_positions = generate_all_moves(game, piece_position);
+    if all_positions.all_threats.len() == 0 {
+        return valid_positions;
+    }
+
+    let piece_data = game.board[piece_position.x][piece_position.y];
+    let is_white = piece_data.is_white;
+
+    // 1. find king threats
+    if other_team_threat_map.all_king_threats.len() > 0 {
+        if piece_data.piece == Piece::King {
+            for pos in all_positions.all_threats {
+                if !is_square_color(game, &pos, is_white)
+                    && !other_team_threat_map.all_threats.contains(&pos)
+                {
+                    valid_positions.insert(pos);
+                }
+            }
+        } else {
+            // place infront of king or capture
+            // but cant move if it will reveal the king
+            if !other_team_threat_map
+                .all_threats_secondary
+                .contains(piece_position)
+            {
+                for pos in all_positions.all_threats {
+                    if !is_square_color(game, &pos, is_white)
+                        && other_team_threat_map.all_king_threats.contains(&pos)
+                    {
+                        valid_positions.insert(pos);
+                    }
+                }
+            }
+        }
+
+        return valid_positions;
+    }
+
+    // 2. check if is secondary
+    let will_reveal_king = other_team_threat_map
+        .all_threats_secondary
+        .contains(piece_position)
+        && piece_data.piece != Piece::King;
+
+    // be aware that this will fail for a piece that is moving from 1 reveal to another
+    for pos in all_positions.all_threats {
+        if !is_square_color(game, &pos, is_white)
+            && (!will_reveal_king || other_team_threat_map.all_threats_secondary.contains(&pos))
+        {
+            valid_positions.insert(pos);
+        }
+    }
+
+    if piece_data.piece == Piece::King {
+        let castle = get_castle_positions(game, piece_position, is_white);
+        for c_pos in castle {
+            valid_positions.insert(c_pos);
+        }
+    }
+
+    return valid_positions;
 }
 
 pub fn move_piece(
@@ -368,6 +525,10 @@ pub fn move_piece(
     auto_promote: bool,
 ) -> HashSet<MoveFlags> {
     let mut flags: HashSet<MoveFlags> = HashSet::new();
+    flags.insert(MoveFlags::Invalid);
+    return flags;
+
+    /*
     let is_white = game.is_white_to_move;
 
     if get_promotion_pawn(game).is_some() {
@@ -499,5 +660,5 @@ pub fn move_piece(
     }
 
     flags.insert(MoveFlags::Valid);
-    flags
+    flags*/
 }

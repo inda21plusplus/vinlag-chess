@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 pub const BOARD_SIZE: usize = 8;
 pub const BLACK_SPAWN: usize = 0;
 pub const WHITE_SPAWN: usize = BOARD_SIZE - 1;
@@ -8,10 +10,11 @@ pub const EMPTY_PEICE: PieceData = PieceData {
     is_white: false,
 };
 
+/*
 pub const EMPTY_CASTLE: Castle = Castle {
     can_castle_king_side: false,
     can_castle_queen_side: false,
-};
+};*/
 
 // logic
 pub const BOARD_X_INPUT: [char; BOARD_SIZE] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -34,9 +37,18 @@ pub struct PieceData {
     pub is_white: bool,
 }
 
+pub struct ThreatMap {
+    pub all_threats : HashSet<Position>,
+    pub all_threats_secondary : HashSet<Position>,
+    pub all_king_threats : HashSet<Position>,
+}
+
 pub struct Castle {
     pub can_castle_king_side: bool,
     pub can_castle_queen_side: bool,
+
+    pub queen_side_rook : Position,
+    pub king_side_rook : Position,
 }
 
 /** 0,0 is the top left; 8,8 is the bottom right */
@@ -50,8 +62,7 @@ pub struct Game {
     /** 0,0 is the top left; 8,8 is the bottom right */
     pub board: [[PieceData; BOARD_SIZE]; BOARD_SIZE],
 
-    pub white_castle: Castle,
-    pub black_castle: Castle,
+    pub castle: [Castle; 2], // 2 players where 0 is the white player and 1 is the black player
 
     pub is_white_to_move: bool,
 

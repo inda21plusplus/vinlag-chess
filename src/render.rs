@@ -46,10 +46,10 @@ fn print_piece(text: &str, fg_color: Color, bg_color: Color) {
 }
 
 pub fn render(game: &Game) {
-    render_highlight(game, &HashSet::new(), Color::Red);
+    render_highlight(game, Vec::new());
 }
 
-pub fn render_highlight(game: &Game, highlight: &HashSet<Position>, highlight_color: Color) {
+pub fn render_highlight(game: &Game, highlight_list : Vec<(HashSet<Position>,Color)> ) {
     let is_inverted = REVERSE_BOARD_ON_SWITCH && !game.is_white_to_move;
 
     for y in 0..BOARD_SIZE {
@@ -67,18 +67,18 @@ pub fn render_highlight(game: &Game, highlight: &HashSet<Position>, highlight_co
             } else {
                 Color::Rgb(150, 150, 150) // Some(Color::Black)  //Some(Color::Rgb(150,150,150))
             };
-
-            let bg_color = if highlight.contains(&Position { x, y }) {
-                highlight_color
+            let is_dark_square = (display_y + display_x) % 2 == 0;
+            let mut bg_color = if is_dark_square {
+                Color::Rgb(24, 26, 27) // Some(Color::Rgb(233,159,75)) //Some(Color::Rgb(24, 26, 27))
             } else {
-                let is_dark_square = (display_y + display_x) % 2 == 0;
-
-                if is_dark_square {
-                    Color::Rgb(24, 26, 27) // Some(Color::Rgb(233,159,75)) //Some(Color::Rgb(24, 26, 27))
-                } else {
-                    Color::Rgb(49, 53, 55) // Some(Color::Rgb(171, 113, 59)) //Some(Color::Rgb(49, 53, 55))
-                }
+                Color::Rgb(49, 53, 55) // Some(Color::Rgb(171, 113, 59)) //Some(Color::Rgb(49, 53, 55))
             };
+            for highlight in &highlight_list {
+                if highlight.0.contains(&Position { x, y }) {
+                    bg_color = highlight.1;
+                } 
+            }
+
             print_piece(
                 get_char(piece_data.piece, piece_data.is_white),
                 fg_color,

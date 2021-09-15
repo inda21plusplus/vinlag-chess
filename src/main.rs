@@ -1,7 +1,8 @@
-use vinlag_chess::render::*;
-use vinlag_chess::parser::*;
-use vinlag_chess::logic::*;
+use termcolor::Color;
 use vinlag_chess::game_data::*;
+use vinlag_chess::logic::*;
+use vinlag_chess::parser::*;
+use vinlag_chess::render::*;
 
 fn main() {
     //chcp 65001
@@ -20,11 +21,32 @@ fn main() {
     // rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5
 
     let mut game =
-        get_board("rnbq1rk1/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 w - - 4 6".to_string())
+        get_board("rnb1k1nr/pppp1ppp/8/4P3/1p5Q/5NP1/PPP1P2P/RNBQK2R w Qkq - 1 4".to_string())
             .unwrap();
 
-    let game_print = print_board(&game);
-    println!("{}", game_print.unwrap());
+    let threats = generate_all_threats(&game, false);
+    let moves = generate_valid_moves(&game,&threats,&Position{x:4, y:7});
+
+    render_highlight(
+        &game,
+        vec![
+            (threats.all_threats, Color::Red),
+            (threats.all_threats_secondary, Color::Blue),
+            (threats.all_king_threats, Color::Green),
+            (moves, Color::Rgb(255,165,0)),
+        ],
+    );
+    /*
+     let pos = Position {
+                x: offset_index,
+                y: WHITE_SPAWN,
+            };
+            let mut moves = generate_all_threats(&game, &pos);
+
+
+            render_highlight(&game, &moves, Color::Red);
+            let input = read_input();
+            offset_index += 1;
 
     loop {
         /*let mut highlight = HashSet::new();
@@ -33,7 +55,7 @@ fn main() {
             piece: Piece::Pawn,
             is_white: false,
         };*/
-        /*
+
 
         let mut offset_index = 0;
         loop {
@@ -41,15 +63,15 @@ fn main() {
                 x: offset_index,
                 y: WHITE_SPAWN,
             };
-            let mut moves = generate_all_moves(&game, &pos);
-            moves.insert(pos);
+            let mut moves = generate_all_threats(&game, &pos);
+
 
             render_highlight(&game, &moves, Color::Red);
             let input = read_input();
             offset_index += 1;
         }
 
-        */
+
 
         render(&game);
 
@@ -75,5 +97,5 @@ fn main() {
             }
             continue;
         }
-    }
+    }*/
 }

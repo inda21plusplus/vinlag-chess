@@ -185,24 +185,24 @@ pub fn print_board(game: &Game) -> Option<String> {
     let mut cant_castle = 0;
 
     // casteling
-    if !game.white_castle.can_castle_king_side && !game.white_castle.can_castle_queen_side {
+    if !game.castle[0].can_castle_king_side && !game.castle[0].can_castle_queen_side {
         cant_castle += 1;
     } else {
-        if game.white_castle.can_castle_king_side {
+        if game.castle[1].can_castle_king_side {
             output.push('K');
         }
-        if game.white_castle.can_castle_queen_side {
+        if game.castle[1].can_castle_queen_side {
             output.push('Q');
         }
     }
 
-    if !game.black_castle.can_castle_king_side && !game.black_castle.can_castle_queen_side {
+    if !game.castle[1].can_castle_king_side && !game.castle[1].can_castle_queen_side {
         cant_castle += 1;
     } else {
-        if game.black_castle.can_castle_king_side {
+        if game.castle[1].can_castle_king_side {
             output.push('k');
         }
-        if game.black_castle.can_castle_queen_side {
+        if game.castle[1].can_castle_queen_side {
             output.push('q');
         }
     }
@@ -284,8 +284,24 @@ pub fn get_board(fen_string: String) -> Option<Game> {
     //castle
     let casle_chars: Vec<char> = split[2].chars().collect(); //.chars();
 
-    let mut white_castle = EMPTY_CASTLE;
-    let mut black_castle = EMPTY_CASTLE;
+    let mut white_castle  = Castle {
+        can_castle_king_side: false,
+        can_castle_queen_side: false,
+        queen_side_rook: Position { x: 0, y: BOARD_SIZE - 1 },
+        king_side_rook: Position {
+            x: BOARD_SIZE - 1,
+            y: BOARD_SIZE - 1,
+        },
+    };
+    let mut black_castle = Castle {
+        can_castle_king_side: false,
+        can_castle_queen_side: false,
+        queen_side_rook: Position { x: 0, y: 0 },
+        king_side_rook: Position {
+            x: BOARD_SIZE - 1,
+            y: 0,
+        },
+    };
 
     //todo fix
     for casle_char in casle_chars {
@@ -322,8 +338,7 @@ pub fn get_board(fen_string: String) -> Option<Game> {
 
     let game = Game {
         board: board,
-        white_castle: white_castle,
-        black_castle: black_castle,
+        castle: [white_castle,black_castle],
         is_white_to_move: is_white_to_move,
         en_passant_position: en_passant_position,
         half_move_clock: half_move_clock.unwrap(),
