@@ -147,6 +147,7 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Thre
                 // 0 means direct attacks, 1 means attacks that jump over 1 piece
                 let mut ghost_index = 0;
                 let mut local_line: HashSet<Position> = HashSet::new();
+                local_line.insert(*piece_position);
                 loop {
                     index += 1;
                     let new_move = Vector2 {
@@ -446,6 +447,7 @@ pub fn generate_valid_moves_for_team(
     return map;
 }
 
+/** TODO en passant */
 pub fn generate_valid_moves(
     game: &Game,
     other_team_threat_map: &ThreatMap,

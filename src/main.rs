@@ -20,12 +20,11 @@ fn main() {
     // no castle
     // rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5
 
-    let mut game =
-        get_board("rnb1k1nr/pppp1ppp/8/4P3/1p5q/5NP1/PPP1P2P/RNBQK2R w KQkq - 1 4".to_string())
-            .unwrap();
+    //rnb1k1nr/pppp1ppp/8/4P3/1p5q/5NP1/PPP1P2P/RNBQK2R w KQkq - 1 4
+    let mut game = get_board("4r3/8/8/8/8/4R3/8/4K3 w KQkq - 1 4".to_string()).unwrap();
 
     let threats = generate_all_threats(&game, false);
-    let moves = generate_valid_moves(&game, &threats, &Position { x: 4, y: 7 });
+    let moves = generate_valid_moves(&game, &threats, &Position { x: 4, y: 5 });
 
     render_highlight(
         &game,
