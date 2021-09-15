@@ -39,7 +39,7 @@ pub struct PieceData {
 
 pub struct ThreatMap {
     pub all_threats : HashSet<Position>,
-    pub all_threats_secondary : HashSet<Position>,
+    pub all_threats_secondary : Vec<HashSet<Position>>,
     pub all_king_threats : HashSet<Position>,
 }
 

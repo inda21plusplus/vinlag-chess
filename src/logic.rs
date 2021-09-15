@@ -39,7 +39,7 @@ third is all direct threats to the king
 */
 pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> ThreatMap {
     let mut all_positions: HashSet<Position> = HashSet::new();
-    let mut all_secondary_positions: HashSet<Position> = HashSet::new();
+    let mut all_secondary_positions: Vec<HashSet<Position>> = Vec::new();
     let mut all_king_positions: HashSet<Position> = HashSet::new();
 
     let start_piece = game.board[piece_position.x][piece_position.y];
@@ -181,9 +181,7 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Thre
                                         all_king_positions.insert(l_move);
                                     }
                                 } else if ghost_index == 1 {
-                                    for l_move in local_line {
-                                        all_secondary_positions.insert(l_move);
-                                    }
+                                    all_secondary_positions.push(local_line);
                                 }
                                 break;
                             }
@@ -273,7 +271,7 @@ pub fn promote_pawn(game: &mut Game, promotion: Piece) -> bool {
 /** Includes all threat positions generate by that team */
 pub fn generate_all_threats(game: &Game, is_white: bool) -> ThreatMap {
     let mut all_threats: HashSet<Position> = HashSet::new();
-    let mut all_threats_secondary: HashSet<Position> = HashSet::new();
+    let mut all_threats_secondary: Vec<HashSet<Position>> = Vec::new();
     let mut all_king_threats: HashSet<Position> = HashSet::new();
     for x in 0..BOARD_SIZE {
         for y in 0..BOARD_SIZE {
@@ -284,7 +282,7 @@ pub fn generate_all_threats(game: &Game, is_white: bool) -> ThreatMap {
                     all_threats.insert(t_pos);
                 }
                 for t_pos in piece_threads.all_threats_secondary {
-                    all_threats_secondary.insert(t_pos);
+                    all_threats_secondary.push(t_pos);
                 }
                 for t_pos in piece_threads.all_king_threats {
                     all_king_threats.insert(t_pos);
@@ -474,12 +472,17 @@ pub fn generate_valid_moves(
                 }
             }
         } else {
+            let mut is_secondary = false;
+            for local_list in &other_team_threat_map.all_threats_secondary {
+                if local_list.contains(piece_position) {
+                    is_secondary = true;
+                    break;
+                }
+            }
+
             // place infront of king or capture
             // but cant move if it will reveal the king
-            if !other_team_threat_map
-                .all_threats_secondary
-                .contains(piece_position)
-            {
+            if !is_secondary {
                 for pos in all_positions.all_threats {
                     if !is_square_color(game, &pos, is_white)
                         && other_team_threat_map.all_king_threats.contains(&pos)
@@ -493,21 +496,25 @@ pub fn generate_valid_moves(
         return valid_positions;
     }
 
-    // 2. check if is secondary
-    let will_reveal_king = other_team_threat_map
-        .all_threats_secondary
-        .contains(piece_position)
-        && piece_data.piece != Piece::King;
-
-    // be aware that this will fail for a piece that is moving from 1 reveal to another
-    for pos in all_positions.all_threats {
-        if !is_square_color(game, &pos, is_white)
-            && (!will_reveal_king || other_team_threat_map.all_threats_secondary.contains(&pos))
-        {
+    // 2. check if is secondary else normal
+    if piece_data.piece != Piece::King {
+        for local_list in &other_team_threat_map.all_threats_secondary {
+            if local_list.contains(piece_position) {
+                for pos in all_positions.all_threats {
+                    if local_list.contains(&pos) {
+                        valid_positions.insert(pos);
+                    }
+                }
+                return valid_positions;
+            }
+        }
+    } else {
+        for pos in all_positions.all_threats {
             valid_positions.insert(pos);
         }
     }
 
+    //3. Add casteling
     if piece_data.piece == Piece::King {
         let castle = get_castle_positions(game, piece_position, is_white);
         for c_pos in castle {
