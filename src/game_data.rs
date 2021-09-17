@@ -38,9 +38,11 @@ pub struct PieceData {
 }
 
 pub struct ThreatMap {
+    pub all_moves : HashSet<Position>,
     pub all_threats : HashSet<Position>,
-    pub all_threats_secondary : Vec<HashSet<Position>>,
+    pub all_pinned : Vec<HashSet<Position>>,
     pub all_king_threats : HashSet<Position>,
+    pub all_king_threats_full : HashSet<Position>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]

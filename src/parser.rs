@@ -110,6 +110,19 @@ fn parse_position(input: &str) -> Option<Position> {
     });
 }
 
+pub fn print_position(pos: Position) -> String {
+    let mut str = String::new();
+    str.push(BOARD_X_INPUT[pos.x]);
+    str.push(BOARD_Y_INPUT[pos.y]);
+    return str;
+}
+
+pub fn print_move(move_from: Position, move_to: Position) -> String {
+    let str1 = print_position(move_from);
+    let str2 = print_position(move_to);
+    return format!("{}{}", str1, str2);
+}
+
 /** Parse move in e6e3 format, result as from -> to */
 pub fn parse_move(input: &str) -> Option<(Position, Position)> {
     if input.len() != 4 {
