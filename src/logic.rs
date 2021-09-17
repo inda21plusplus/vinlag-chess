@@ -299,7 +299,7 @@ pub fn generate_all_threats(game: &Game, is_white: bool) -> ThreatMap {
     }
 }
 
-fn find_king(game: &Game, is_white: bool) -> Option<Position> {
+/*fn find_king(game: &Game, is_white: bool) -> Option<Position> {
     for x in 0..BOARD_SIZE {
         for y in 0..BOARD_SIZE {
             let piece_data = game.board[x][y];
@@ -309,7 +309,7 @@ fn find_king(game: &Game, is_white: bool) -> Option<Position> {
         }
     }
     None
-}
+}*/
 
 fn get_castle_positions(
     game: &Game,
@@ -517,12 +517,10 @@ pub fn generate_valid_moves(
     }
 
     //3. Adds rest
-    //if piece_data.piece == Piece::King {
     let castle = generate_all_moves_and_castle(game, piece_position);
     for c_pos in castle {
         valid_positions.insert(c_pos);
     }
-    //}
 
     return valid_positions;
 }
@@ -532,11 +530,11 @@ fn remove_castle(game: &mut Game, pos: Position) {
 
     let is_white = start_piece.is_white;
 
-    let player_index = if (is_white) { 0 } else { 1 };
+    let player_index = if is_white { 0 } else { 1 };
     let mut castle_status = game.castle[player_index];
-    if (castle_status.queen_side_rook == pos) {
+    if castle_status.queen_side_rook == pos {
         castle_status.can_castle_queen_side = false;
-    } else if (castle_status.king_side_rook == pos) {
+    } else if castle_status.king_side_rook == pos {
         castle_status.can_castle_king_side = false;
     }
     game.castle[player_index] = castle_status;

@@ -1,6 +1,91 @@
 use crate::game_data::*;
 pub const STANDARD_BOARD: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+#[test]
+fn parse_test_1() {
+    let pos_unchecked = parse_position("a1");
+    assert!(pos_unchecked.is_some());
+    assert_eq!(
+        pos_unchecked.unwrap(),
+        Position {
+            x: 0,
+            y: BOARD_SIZE - 1
+        }
+    );
+}
+
+#[test]
+fn parse_test_2() {
+    let pos_unchecked = parse_position("h8");
+    assert!(pos_unchecked.is_some());
+    assert_eq!(
+        pos_unchecked.unwrap(),
+        Position {
+            x: BOARD_SIZE - 1,
+            y: 0
+        }
+    );
+}
+
+#[test]
+fn parse_test_invalid() {
+    assert!(parse_position("h9").is_none());
+    assert!(parse_position("a0").is_none());
+    assert!(parse_position("a").is_none());
+    assert!(parse_position("0").is_none());
+    assert!(parse_position("--").is_none());
+    assert!(parse_position("").is_none());
+    assert!(parse_position(" ").is_none());
+    assert!(parse_position("\n").is_none());
+}
+
+#[test]
+fn parse_test_valid() {
+    assert!(parse_position("h7").is_some());
+    assert!(parse_position("h2").is_some());
+    assert!(parse_position("e2").is_some());
+    assert!(parse_position("c1").is_some());
+    assert!(parse_position("f4").is_some());
+
+    assert!(parse_position("F4").is_some());
+    assert!(parse_position("A1").is_some());
+    assert!(parse_position("B2").is_some());
+    assert!(parse_position("C8").is_some());
+}
+
+#[test]
+fn fen_test_no_castle() {
+    let str = "rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5";
+    let board = get_board(str.to_string());
+    assert!(board.is_some());
+    let board_string = print_board(&board.unwrap());
+    assert!(board_string.is_some());
+    let valid_board_string = board_string.unwrap();
+    assert_eq!(str, valid_board_string);
+}
+
+#[test]
+fn fen_test_one_castle() {
+    let str = "rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 b kq - 3 5";
+    let board = get_board(str.to_string());
+    assert!(board.is_some());
+    let board_string = print_board(&board.unwrap());
+    assert!(board_string.is_some());
+    let valid_board_string = board_string.unwrap();
+    assert_eq!(str, valid_board_string);
+}
+
+#[test]
+fn fen_test_both_castle() {
+    let str = "rnbq1rk1/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 w - - 4 6";
+    let board = get_board(str.to_string());
+    assert!(board.is_some());
+    let board_string = print_board(&board.unwrap());
+    assert!(board_string.is_some());
+    let valid_board_string = board_string.unwrap();
+    assert_eq!(str, valid_board_string);
+}
+
 /** Parse position in the e6 format */
 fn parse_position(input: &str) -> Option<Position> {
     let real_input = input.to_lowercase();
@@ -285,10 +370,13 @@ pub fn get_board(fen_string: String) -> Option<Game> {
     //castle
     let casle_chars: Vec<char> = split[2].chars().collect(); //.chars();
 
-    let mut white_castle  = Castle {
+    let mut white_castle = Castle {
         can_castle_king_side: false,
         can_castle_queen_side: false,
-        queen_side_rook: Position { x: 0, y: BOARD_SIZE - 1 },
+        queen_side_rook: Position {
+            x: 0,
+            y: BOARD_SIZE - 1,
+        },
         king_side_rook: Position {
             x: BOARD_SIZE - 1,
             y: BOARD_SIZE - 1,
@@ -304,7 +392,6 @@ pub fn get_board(fen_string: String) -> Option<Game> {
         },
     };
 
-    //todo fix
     for casle_char in casle_chars {
         match casle_char {
             'K' => {
@@ -323,7 +410,7 @@ pub fn get_board(fen_string: String) -> Option<Game> {
         };
     }
 
-    let en_passant_position = None::<Position>; //TODO FIX split[3]
+    let en_passant_position = None::<Position>;
 
     let half_move_clock = split[4].parse::<u16>();
     if half_move_clock.is_err() {
@@ -339,7 +426,7 @@ pub fn get_board(fen_string: String) -> Option<Game> {
 
     let game = Game {
         board: board,
-        castle: [white_castle,black_castle],
+        castle: [white_castle, black_castle],
         is_white_to_move: is_white_to_move,
         en_passant_position: en_passant_position,
         half_move_clock: half_move_clock.unwrap(),

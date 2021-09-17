@@ -43,24 +43,6 @@ mod tests {
 
     //https://www.chess.com/analysis
 
-    #[test]
-    fn fen_test_no_castle() {
-        let str = "rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5";
-        assert_eq!(str, load_board(str, Vec::new()).unwrap().0);
-    }
-
-    #[test]
-    fn fen_test_one_castle() {
-        let str = "rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 b kq - 3 5";
-        let q = load_board(str, Vec::new());
-        assert_eq!(str, q.unwrap().0);
-    }
-
-    #[test]
-    fn fen_test_both_castle() {
-        let str = "rnbq1rk1/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 w - - 4 6";
-        assert_eq!(str, load_board(str, Vec::new()).unwrap().0);
-    }
 
     #[test]
     fn simple_move() {
