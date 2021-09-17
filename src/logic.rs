@@ -518,13 +518,28 @@ pub fn generate_valid_moves(
 
     //3. Adds rest
     //if piece_data.piece == Piece::King {
-        let castle = generate_all_moves_and_castle(game, piece_position);
-        for c_pos in castle {
-            valid_positions.insert(c_pos);
-        }
+    let castle = generate_all_moves_and_castle(game, piece_position);
+    for c_pos in castle {
+        valid_positions.insert(c_pos);
+    }
     //}
 
     return valid_positions;
+}
+
+fn remove_castle(game: &mut Game, pos: Position) {
+    let start_piece = game.board[pos.x][pos.y];
+
+    let is_white = start_piece.is_white;
+
+    let player_index = if (is_white) { 0 } else { 1 };
+    let mut castle_status = game.castle[player_index];
+    if (castle_status.queen_side_rook == pos) {
+        castle_status.can_castle_queen_side = false;
+    } else if (castle_status.king_side_rook == pos) {
+        castle_status.can_castle_king_side = false;
+    }
+    game.castle[player_index] = castle_status;
 }
 
 /** Will go horrible wrong if input is not checked, only use if you have checked the move beforehand with valid moves
@@ -620,6 +635,12 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: &Position, move_end: &Posi
             // clears old
             game.board[rook_position.x][rook_position.y] = EMPTY_PEICE;
             game.board[move_start.x][move_start.y] = EMPTY_PEICE;
+
+            let player_index = if is_white { 0 } else { 1 };
+            let mut castle_state = game.castle[player_index];
+            castle_state.can_castle_king_side = false;
+            castle_state.can_castle_queen_side = false;
+            game.castle[player_index] = castle_state;
         }
     }
 
@@ -628,6 +649,14 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: &Position, move_end: &Posi
     } else {
         game.full_move_clock + 1
     };
+
+    if start_piece.piece == Piece::Rook {
+        remove_castle(game, *move_start);
+    }
+
+    if capture_piece.piece == Piece::Rook {
+        remove_castle(game, *move_end);
+    }
 
     game.half_move_clock = half_move_clock;
     game.full_move_clock = full_move_clock;
@@ -642,9 +671,9 @@ pub fn move_piece_no_map(
     move_start: &Position,
     move_end: &Position,
     auto_promote: bool,
-) -> HashSet<MoveFlags> { 
+) -> HashSet<MoveFlags> {
     let threatmap = generate_all_threats(&game, !game.is_white_to_move);
-    return move_piece(game, move_start,move_end,&threatmap,auto_promote);
+    return move_piece(game, move_start, move_end, &threatmap, auto_promote);
 }
 
 pub fn move_piece(
@@ -668,7 +697,7 @@ pub fn move_piece(
         return flags;
     }
 
-    if !generate_valid_moves(game,other_team_threat_map ,move_start).contains(move_end) {
+    if !generate_valid_moves(game, other_team_threat_map, move_start).contains(move_end) {
         flags.insert(MoveFlags::Invalid);
         return flags;
     }
@@ -681,7 +710,7 @@ pub fn move_piece(
         if start_piece.piece == Piece::Pawn && auto_promote {
             promote_pawn(game, Piece::Queen);
         }
-        
+
         return flags;
     } else {
         flags.insert(MoveFlags::Invalid);
