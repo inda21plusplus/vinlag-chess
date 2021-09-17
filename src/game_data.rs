@@ -61,7 +61,7 @@ pub struct Position {
     pub y: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Game {
     /** 0,0 is the top left; 8,8 is the bottom right */
     pub board: [[PieceData; BOARD_SIZE]; BOARD_SIZE],

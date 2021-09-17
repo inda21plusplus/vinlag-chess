@@ -599,11 +599,11 @@ pub fn move_piece_unsafe(
     game: &mut Game,
     move_start: Position,
     move_end: Position,
-) -> Vec<(Position, PieceData)> {
+) -> bool {
     let start_piece = game.board[move_start.x][move_start.y];
-    let mut undo: Vec<(Position, PieceData)> = Vec::new();
+    
     if start_piece.piece == Piece::None {
-        return undo;
+        return false;
     }
 
     let is_white = start_piece.is_white;
@@ -616,15 +616,9 @@ pub fn move_piece_unsafe(
     }
 
     if start_piece.piece != Piece::King && start_piece.piece != Piece::Pawn {
-        undo.push((move_start, start_piece));
-        undo.push((move_end, capture_piece));
-
         game.board[move_end.x][move_end.y] = start_piece;
         game.board[move_start.x][move_start.y] = EMPTY_PEICE;
     } else if start_piece.piece == Piece::Pawn {
-        undo.push((move_start, start_piece));
-        undo.push((move_end, capture_piece));
-
         game.board[move_end.x][move_end.y] = start_piece;
         game.board[move_start.x][move_start.y] = EMPTY_PEICE;
 
@@ -645,7 +639,6 @@ pub fn move_piece_unsafe(
                     let real_capture = real_capture_unchecked.unwrap();
                     let real_capture_piece_data = game.board[real_capture.x][real_capture.y];
 
-                    undo.push((real_capture, real_capture_piece_data));
                     game.board[real_capture.x][real_capture.y] = EMPTY_PEICE;
                 }
             }
@@ -671,9 +664,6 @@ pub fn move_piece_unsafe(
 
         if move_distance == 1 || move_distance == 0 {
             // if only move 1 square then it is a normal move
-            undo.push((move_start, start_piece));
-            undo.push((move_end, capture_piece));
-
             game.board[move_end.x][move_end.y] = start_piece;
             game.board[move_start.x][move_start.y] = EMPTY_PEICE;
         } else if move_distance == 2 {
@@ -687,7 +677,7 @@ pub fn move_piece_unsafe(
                 },
             ) {
                 Some(pos) => pos,
-                None => return Vec::new(),
+                None => return false,
             };
 
             let is_king_side = offset_x > 1;
@@ -701,12 +691,6 @@ pub fn move_piece_unsafe(
             };
 
             let rook_data = game.board[rook_position.x][rook_position.y];
-
-            undo.push((move_start, start_piece));
-            undo.push((rook_position, rook_data));
-            undo.push((new_rook_position, EMPTY_PEICE));
-            undo.push((move_end, EMPTY_PEICE));
-
             // moves rook
             game.board[new_rook_position.x][new_rook_position.y] = rook_data;
 
@@ -737,152 +721,7 @@ pub fn move_piece_unsafe(
     game.full_move_clock = full_move_clock;
     game.is_white_to_move = !is_white;
     game.en_passant_position = en_passant_position;
-    return undo;
-}
-
-/** Will go horrible wrong if input is not checked, only use if you have checked the move beforehand with valid moves
-Will return everything needed to undo the move
-*/
-pub fn move_piece_unsafe_2(
-    game: &mut Game,
-    move_start: Position,
-    move_end: Position,
-) -> Vec<(Position, PieceData)> {
-    let start_piece = game.board[move_start.x][move_start.y];
-    let mut undo: Vec<(Position, PieceData)> = Vec::new();
-
-    if start_piece.piece == Piece::None {
-        return undo;
-    }
-
-    let is_white = start_piece.is_white;
-    let mut half_move_clock = game.half_move_clock + 1;
-    let mut en_passant_position: Option<Position> = None;
-
-    let capture_piece = game.board[move_end.x][move_end.y];
-    if capture_piece.piece == Piece::Pawn {
-        half_move_clock = 0;
-    }
-
-    if start_piece.piece != Piece::King && start_piece.piece != Piece::Pawn {
-        undo.push((move_start, start_piece));
-        undo.push((move_end, capture_piece));
-
-        game.board[move_end.x][move_end.y] = start_piece;
-        game.board[move_start.x][move_start.y] = EMPTY_PEICE;
-    } else if start_piece.piece == Piece::Pawn {
-        undo.push((move_start, start_piece));
-        undo.push((move_end, capture_piece));
-
-        game.board[move_end.x][move_end.y] = start_piece;
-        game.board[move_start.x][move_start.y] = EMPTY_PEICE;
-
-        let move_direction: i8 = if is_white { -1 } else { 1 };
-
-        if game.en_passant_position.is_some() {
-            if move_end == game.en_passant_position.unwrap() {
-                let real_capture_unchecked = get_position(
-                    &move_end,
-                    &Vector2 {
-                        x: 0,
-                        y: move_direction,
-                    },
-                );
-
-                // captures the real pawn and not just air
-                if real_capture_unchecked.is_some() {
-                    let real_capture = real_capture_unchecked.unwrap();
-                    let real_capture_piece_data = game.board[real_capture.x][real_capture.y];
-                    undo.push((real_capture, real_capture_piece_data));
-
-                    game.board[real_capture.x][real_capture.y] = EMPTY_PEICE;
-                }
-            }
-        } else if move_end.y as i8 - move_start.y as i8 == move_direction * 2 {
-            // if move twice, it means that it can be en passanted
-            en_passant_position = get_position(
-                &move_start,
-                &Vector2 {
-                    x: 0,
-                    y: move_direction,
-                },
-            )
-        }
-    } else if start_piece.piece == Piece::King {
-        let offset_x = move_end.x as i8 - move_start.x as i8;
-        let move_distance = i8::abs(offset_x); //i8::abs(move_start.y as i8 - move_end.y as i8) + i8::abs(offset_x);
-
-        if move_distance == 1 {
-            // if only move 1 square then it is a normal move
-        } else if move_distance == 2 {
-            // if moves 2 squares it means that it is doing castling
-            // rook position = king end move -movedirection x
-            let new_rook_position = match get_position(
-                &move_end,
-                &Vector2 {
-                    x: -i8::signum(offset_x),
-                    y: 0,
-                },
-            ) {
-                Some(pos) => pos,
-                None => return Vec::new(),
-            };
-
-            let is_king_side = offset_x > 1;
-
-            let caste = &game.castle[if is_white { 0 } else { 1 }];
-
-            let rook_position = if is_king_side {
-                caste.king_side_rook
-            } else {
-                caste.queen_side_rook
-            };
-
-            let rook_data = game.board[rook_position.x][rook_position.y];
-
-            // moves rook
-            game.board[new_rook_position.x][new_rook_position.y] = rook_data;
-
-            // moves king
-            game.board[move_end.x][move_end.y] = start_piece;
-
-            // clears old
-            game.board[rook_position.x][rook_position.y] = EMPTY_PEICE;
-            game.board[move_start.x][move_start.y] = EMPTY_PEICE;
-
-            undo.push((move_start, start_piece));
-            undo.push((rook_position, rook_data));
-            undo.push((new_rook_position, EMPTY_PEICE));
-            undo.push((move_end, EMPTY_PEICE));
-
-            let player_index = if is_white { 0 } else { 1 };
-            let mut castle_state = game.castle[player_index];
-            castle_state.can_castle_king_side = false;
-            castle_state.can_castle_queen_side = false;
-            game.castle[player_index] = castle_state;
-        }
-    }
-
-    let full_move_clock = if is_white {
-        game.full_move_clock
-    } else {
-        game.full_move_clock + 1
-    };
-
-    if start_piece.piece == Piece::Rook {
-        remove_castle(game, move_start);
-    }
-
-    if capture_piece.piece == Piece::Rook {
-        remove_castle(game, move_end);
-    }
-
-    game.half_move_clock = half_move_clock;
-    game.full_move_clock = full_move_clock;
-    game.is_white_to_move = !is_white;
-    game.en_passant_position = en_passant_position;
-
-    return undo;
+    return true;
 }
 
 pub fn move_piece_no_map(
@@ -923,7 +762,7 @@ pub fn move_piece(
 
     let start_piece = game.board[move_start.x][move_start.y];
 
-    if move_piece_unsafe(game, move_start, move_end).len() > 0 {
+    if move_piece_unsafe(game, move_start, move_end) {
         flags.insert(MoveFlags::Valid);
 
         if start_piece.piece == Piece::Pawn && auto_promote {
