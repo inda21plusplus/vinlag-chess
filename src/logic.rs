@@ -637,10 +637,21 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: &Position, move_end: &Posi
     return true;
 }
 
+pub fn move_piece_no_map(
+    game: &mut Game,
+    move_start: &Position,
+    move_end: &Position,
+    auto_promote: bool,
+) -> HashSet<MoveFlags> { 
+    let threatmap = generate_all_threats(&game, !game.is_white_to_move);
+    return move_piece(game, move_start,move_end,&generate_all_threats(game, !game.is_white_to_move),auto_promote);
+}
+
 pub fn move_piece(
     game: &mut Game,
     move_start: &Position,
     move_end: &Position,
+    other_team_threat_map: &ThreatMap,
     auto_promote: bool,
 ) -> HashSet<MoveFlags> {
     let mut flags: HashSet<MoveFlags> = HashSet::new();
@@ -657,7 +668,7 @@ pub fn move_piece(
         return flags;
     }
 
-    if !generate_all_moves_and_castle(game, move_start).contains(move_end) {
+    if !generate_valid_moves(game,other_team_threat_map ,move_start).contains(move_end) {
         flags.insert(MoveFlags::Invalid);
         return flags;
     }

@@ -20,7 +20,7 @@ pub const EMPTY_CASTLE: Castle = Castle {
 pub const BOARD_X_INPUT: [char; BOARD_SIZE] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 pub const BOARD_Y_INPUT: [char; BOARD_SIZE] = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Piece {
     None,
     Pawn,
@@ -31,7 +31,7 @@ pub enum Piece {
     King,
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub struct PieceData {
     pub piece: Piece,
     pub is_white: bool,
@@ -43,6 +43,7 @@ pub struct ThreatMap {
     pub all_king_threats : HashSet<Position>,
 }
 
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub struct Castle {
     pub can_castle_king_side: bool,
     pub can_castle_queen_side: bool,
@@ -52,12 +53,13 @@ pub struct Castle {
 }
 
 /** 0,0 is the top left; 8,8 is the bottom right */
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Debug, Hash, Clone, Copy)]
 pub struct Position {
     pub x: usize,
     pub y: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Game {
     /** 0,0 is the top left; 8,8 is the bottom right */
     pub board: [[PieceData; BOARD_SIZE]; BOARD_SIZE],
