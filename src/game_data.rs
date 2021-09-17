@@ -97,7 +97,6 @@ pub(crate) struct Moveset {
 pub enum MoveFlags {
     Invalid,
     InvalidWaitingForPromotion,
-    InvalidRevealKing,
     Valid,
     Capture,
     BlackWon,

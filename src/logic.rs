@@ -516,7 +516,7 @@ pub fn generate_valid_moves(
         }
     }
 
-    //3. Add casteling
+    //3. Adds castling
     if piece_data.piece == Piece::King {
         let castle = get_castle_positions(game, piece_position, is_white);
         for c_pos in castle {
@@ -527,6 +527,116 @@ pub fn generate_valid_moves(
     return valid_positions;
 }
 
+/** Will go horrible wrong if input is not checked, only use if you have checked the move beforehand with valid moves
+Will return true if move is done
+*/
+pub fn move_piece_unsafe(game: &mut Game, move_start: &Position, move_end: &Position) -> bool {
+    let start_piece = game.board[move_start.x][move_start.y];
+    if start_piece.piece == Piece::None {
+        return false;
+    }
+
+    let is_white = start_piece.is_white;
+    let mut half_move_clock = game.half_move_clock + 1;
+    let mut en_passant_position: Option<Position> = None;
+
+    let capture_piece = game.board[move_end.x][move_end.y];
+    if capture_piece.piece == Piece::Pawn {
+        half_move_clock = 0;
+    }
+
+    if start_piece.piece != Piece::King && start_piece.piece != Piece::Pawn {
+        game.board[move_end.x][move_end.y] = start_piece;
+        game.board[move_start.x][move_start.y] = EMPTY_PEICE;
+    } else if start_piece.piece == Piece::Pawn {
+        game.board[move_end.x][move_end.y] = start_piece;
+        game.board[move_start.x][move_start.y] = EMPTY_PEICE;
+
+        let move_direction: i8 = if is_white { -1 } else { 1 };
+
+        if game.en_passant_position.is_some() {
+            if *move_end == game.en_passant_position.unwrap() {
+                let real_capture_unchecked = get_position(
+                    move_end,
+                    &Vector2 {
+                        x: 0,
+                        y: move_direction,
+                    },
+                );
+
+                // captures the real pawn and not just air
+                if real_capture_unchecked.is_some() {
+                    let real_capture = real_capture_unchecked.unwrap();
+                    game.board[real_capture.x][real_capture.y] = EMPTY_PEICE;
+                }
+            }
+        } else if move_end.y as i8 - move_start.y as i8 == move_direction * 2 {
+            // if move twice, it means that it can be en passanted
+            en_passant_position = get_position(
+                move_start,
+                &Vector2 {
+                    x: 0,
+                    y: move_direction,
+                },
+            )
+        }
+    } else if start_piece.piece == Piece::King {
+        let offset_x = move_end.x as i8 - move_start.x as i8;
+        let move_distance = i8::abs(move_start.y as i8 - move_end.y as i8) + i8::abs(offset_x);
+
+        if move_distance == 1 {
+            // if only move 1 square then it is a normal move
+        } else if move_distance == 2 {
+            // if moves 2 squares it means that it is doing castling
+            // rook position = king end move -movedirection x
+            let new_rook_position = match get_position(
+                move_end,
+                &Vector2 {
+                    x: -i8::signum(offset_x),
+                    y: 0,
+                },
+            ) {
+                Some(pos) => pos,
+                None => return false,
+            };
+
+            let is_king_side = offset_x > 1;
+
+            let caste = &game.castle[if is_white { 0 } else { 1 }];
+
+            let rook_position = if is_king_side {
+                caste.king_side_rook
+            } else {
+                caste.queen_side_rook
+            };
+
+            // moves rook
+            game.board[new_rook_position.x][new_rook_position.y] =
+                game.board[rook_position.x][rook_position.y];
+
+            // moves king
+            game.board[move_end.x][move_end.y] = game.board[move_start.x][move_start.y];
+
+            // clears old
+            game.board[rook_position.x][rook_position.y] = EMPTY_PEICE;
+            game.board[move_start.x][move_start.y] = EMPTY_PEICE;
+        }
+    }
+
+    let full_move_clock = if is_white {
+        game.full_move_clock
+    } else {
+        game.full_move_clock + 1
+    };
+
+    game.half_move_clock = half_move_clock;
+    game.full_move_clock = full_move_clock;
+    game.is_white_to_move = !is_white;
+    game.en_passant_position = en_passant_position;
+
+    return true;
+}
+
 pub fn move_piece(
     game: &mut Game,
     move_start: &Position,
@@ -534,8 +644,38 @@ pub fn move_piece(
     auto_promote: bool,
 ) -> HashSet<MoveFlags> {
     let mut flags: HashSet<MoveFlags> = HashSet::new();
-    flags.insert(MoveFlags::Invalid);
-    return flags;
+
+    if get_promotion_pawn(game).is_some() {
+        flags.insert(MoveFlags::Invalid);
+        flags.insert(MoveFlags::InvalidWaitingForPromotion);
+        return flags;
+    }
+
+    // basic check first
+    if !is_valid_move(game, move_start, move_end) {
+        flags.insert(MoveFlags::Invalid);
+        return flags;
+    }
+
+    if !generate_all_moves_and_castle(game, move_start).contains(move_end) {
+        flags.insert(MoveFlags::Invalid);
+        return flags;
+    }
+
+    let start_piece = game.board[move_start.x][move_start.y];
+
+    if move_piece_unsafe(game, move_start, move_end) {
+        flags.insert(MoveFlags::Valid);
+
+        if start_piece.piece == Piece::Pawn && auto_promote {
+            promote_pawn(game, Piece::Queen);
+        }
+        
+        return flags;
+    } else {
+        flags.insert(MoveFlags::Invalid);
+        return flags;
+    }
 
     /*
     let is_white = game.is_white_to_move;
