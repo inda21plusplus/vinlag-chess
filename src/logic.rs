@@ -516,13 +516,13 @@ pub fn generate_valid_moves(
         }
     }
 
-    //3. Adds castling
-    if piece_data.piece == Piece::King {
-        let castle = get_castle_positions(game, piece_position, is_white);
+    //3. Adds rest
+    //if piece_data.piece == Piece::King {
+        let castle = generate_all_moves_and_castle(game, piece_position);
         for c_pos in castle {
             valid_positions.insert(c_pos);
         }
-    }
+    //}
 
     return valid_positions;
 }
@@ -644,7 +644,7 @@ pub fn move_piece_no_map(
     auto_promote: bool,
 ) -> HashSet<MoveFlags> { 
     let threatmap = generate_all_threats(&game, !game.is_white_to_move);
-    return move_piece(game, move_start,move_end,&generate_all_threats(game, !game.is_white_to_move),auto_promote);
+    return move_piece(game, move_start,move_end,&threatmap,auto_promote);
 }
 
 pub fn move_piece(

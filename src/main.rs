@@ -21,16 +21,16 @@ fn main() {
     // rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5
 
     //rnb1k1nr/pppp1ppp/8/4P3/1p5q/5NP1/PPP1P2P/RNBQK2R w KQkq - 1 4
-    let mut game = get_board("4r3/8/8/8/8/4R3/8/4K3 w KQkq - 1 4".to_string()).unwrap();
+    let mut game = get_board(STANDARD_BOARD.to_string()).unwrap();//get_board("4r3/8/8/8/8/4R3/8/4K3 w KQkq - 1 4".to_string()).unwrap();
 
     let threats = generate_all_threats(&game, false);
-    let moves = generate_valid_moves(&game, &threats, &Position { x: 4, y: 5 });
+    let moves = generate_valid_moves(&game, &threats,&Position {x:1,y:6});
 
     render_highlight(
         &game,
         vec![
-            (&threats.all_threats, Color::Red),
-            (&threats.all_threats_secondary[0], Color::Blue),
+            //(&threats.all_threats, Color::Red),
+            //(&threats.all_threats_secondary[0], Color::Blue),
             (&threats.all_king_threats, Color::Green),
             (&moves, Color::Rgb(255, 165, 0)),
         ],

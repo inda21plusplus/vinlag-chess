@@ -1,4 +1,5 @@
 use crate::game_data::*;
+pub const STANDARD_BOARD: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 /** Parse position in the e6 format */
 fn parse_position(input: &str) -> Option<Position> {

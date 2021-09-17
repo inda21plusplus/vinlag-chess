@@ -42,7 +42,6 @@ mod tests {
     }
 
     //https://www.chess.com/analysis
-    const STANDARD_BOARD: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     #[test]
     fn fen_test_no_castle() {
@@ -101,15 +100,16 @@ mod tests {
         for x in 0..BOARD_SIZE {
             for y in 0..BOARD_SIZE {
                 let pos = Position { x: x, y: y };
-                let mut clone_board = (game).clone();
-                let piece_data = clone_board.board[x][y];
+                
+                let piece_data = game.board[x][y];
                 if piece_data.piece != Piece::None
-                    && piece_data.is_white == clone_board.is_white_to_move
+                    && piece_data.is_white == game.is_white_to_move
                 {
                     let threatmap =
-                        generate_all_threats(&clone_board, !clone_board.is_white_to_move);
-                    let valid_moves = generate_valid_moves(&clone_board, &threatmap, &pos);
+                        generate_all_threats(&game, !game.is_white_to_move);
+                    let valid_moves = generate_valid_moves(&game, &threatmap, &pos);
                     for move_end in valid_moves {
+                        let mut clone_board = (game).clone();
                         if move_piece_unsafe(&mut clone_board, &pos, &move_end) {
                             num_moves += move_all(clone_board, depth - 1);
                         }
@@ -129,5 +129,8 @@ mod tests {
 
         assert_eq!(move_all(game, 0), 1);
         assert_eq!(move_all(game, 1), 20);
+        assert_eq!(move_all(game, 2), 400);
+        assert_eq!(move_all(game, 3), 8902);
+        assert_eq!(move_all(game, 4), 197281);
     }
 }
