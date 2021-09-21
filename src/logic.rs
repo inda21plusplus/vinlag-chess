@@ -116,7 +116,6 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Thre
                     && new_valid_position == game.en_passant_position.unwrap()
                 {
                     all_moves.insert(new_valid_position);
-                    all_threats.insert(new_valid_position);
                 } else if !is_square_color(game, &new_valid_position, start_piece.is_white) {
                     // I dont want the pawn to be able to move sideways, but to threaten the sideways pieces
 
@@ -128,9 +127,8 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Thre
                     if is_square_color(game, &new_valid_position, !start_piece.is_white) {
                         all_moves.insert(new_valid_position);
                     }
-
-                    all_threats.insert(new_valid_position);
                 }
+                all_threats.insert(new_valid_position);
             }
         } else {
             let moveset = get_moveset(start_piece.piece);
@@ -149,8 +147,8 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Thre
                         all_king_threats.insert(*piece_position);
                     }
                     all_moves.insert(new_valid_position);
-                    all_threats.insert(new_valid_position);
                 }
+                all_threats.insert(new_valid_position);
             }
 
             // Goes though all inf move directions
@@ -641,7 +639,8 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: Position, move_end: Positi
     let mut en_passant_position: Option<Position> = None;
 
     let capture_piece = game.board[move_end.x][move_end.y];
-    if capture_piece.piece == Piece::Pawn {
+    // reset on any capture
+    if capture_piece.piece != Piece::None {
         half_move_clock = 0;
     }
 

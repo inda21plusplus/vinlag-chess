@@ -76,12 +76,15 @@ mod tests {
         let str = "rn2kb1r/pp1q1ppp/3p3n/2pPp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq c6 0 7";
         assert_eq!(
             "rn2kb1r/pp1q1ppp/2Pp3n/4p3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R b kq - 0 7",
-            load_board(str, vec!["d5c6"])
-                .unwrap()
-                .0
+            load_board(str, vec!["d5c6"]).unwrap().0
         );
     }
 
+    fn total_moves(game: Game, depth: u32) -> u32 {
+        return move_all(game, depth).0;
+    }
+
+    /* does all possible moves, returns as moves + time*/
     fn move_all(game: Game, depth: u32) -> (u32, u128) {
         if depth == 0 {
             return (1, 0);
@@ -118,14 +121,14 @@ mod tests {
     fn run_deep_test_1() {
         let game = get_board(STANDARD_BOARD.to_string()).unwrap();
         //println!("TIME {}ms", move_all(game, 3).1 / 1_000_000);
-        assert_eq!(move_all(game, 0).0, 1);
-        assert_eq!(move_all(game, 1).0, 20);
-        assert_eq!(move_all(game, 2).0, 400);
-        assert_eq!(move_all(game, 3).0, 8902);
+        assert_eq!(total_moves(game, 0), 1);
+        assert_eq!(total_moves(game, 1), 20);
+        assert_eq!(total_moves(game, 2), 400);
+        assert_eq!(total_moves(game, 3), 8902);
 
-        //assert_eq!(move_all(game, 4).0, 197281);
+        assert_eq!(total_moves(game, 4), 197281);
         //627.90s and it works!!
-        //assert_eq!(move_all(game, 5, 0).0, 4865609);
+        //assert_eq!(total_moves(game, 5, 0), 4865609);
     }
 
     #[test]
@@ -134,11 +137,11 @@ mod tests {
             "rnbqkbnr/ppp1p2p/6p1/3p1p2/6P1/5P1N/PPPPP1BP/RNBQK2R b KQkq - 1 4".to_string(),
         )
         .unwrap();
-        assert_eq!(move_all(game, 0).0, 1);
-        assert_eq!(move_all(game, 1).0, 27);
-        assert_eq!(move_all(game, 2).0, 671);
-        assert_eq!(move_all(game, 3).0, 19218);
-        //assert_eq!(move_all(game, 4).0, 492460);
+        assert_eq!(total_moves(game, 0), 1);
+        assert_eq!(total_moves(game, 1), 27);
+        assert_eq!(total_moves(game, 2), 671);
+        assert_eq!(total_moves(game, 3), 19218);
+        assert_eq!(total_moves(game, 4), 492460);
     }
 
     #[test]
@@ -147,11 +150,11 @@ mod tests {
             "r1bqkb1r/p1pppppp/8/1p4B1/2Pn2n1/N3Q3/PP2PPPP/R3KBNR b KQkq - 1 6".to_string(),
         )
         .unwrap();
-        assert_eq!(move_all(game, 0).0, 1);
-        assert_eq!(move_all(game, 1).0, 32);
-        assert_eq!(move_all(game, 2).0, 1173);
-        assert_eq!(move_all(game, 3).0, 36787);
-        assert_eq!(move_all(game, 4).0, 1373011); // check 1373021 vs 1373011
+        assert_eq!(total_moves(game, 0), 1);
+        assert_eq!(total_moves(game, 1), 32);
+        assert_eq!(total_moves(game, 2), 1173);
+        assert_eq!(total_moves(game, 3), 36787);
+        assert_eq!(total_moves(game, 4), 1373011);
     }
 
     #[test]
@@ -160,11 +163,11 @@ mod tests {
             "rn2kb1r/pppq1ppp/3p3n/3Pp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R b kq - 2 6".to_string(),
         )
         .unwrap();
-        assert_eq!(move_all(game, 0).0, 1);
-        assert_eq!(move_all(game, 1).0, 31);
-        assert_eq!(move_all(game, 2).0, 767);
-        assert_eq!(move_all(game, 3).0, 24016);
-        assert_eq!(move_all(game, 4).0, 679848); // check 679856 vs 679848
+        assert_eq!(total_moves(game, 0), 1);
+        assert_eq!(total_moves(game, 1), 31);
+        assert_eq!(total_moves(game, 2), 767);
+        assert_eq!(total_moves(game, 3), 24016);
+        assert_eq!(total_moves(game, 4), 679848);
     }
 
     #[test]
@@ -173,44 +176,61 @@ mod tests {
             "rn1qkbnr/p1pb1pp1/1p1p3p/4p1B1/Q1PP4/2N3P1/PP2PP1P/R3KBNR b KQkq - 0 6".to_string(),
         )
         .unwrap();
-        assert_eq!(move_all(game, 0).0, 1);
-        assert_eq!(move_all(game, 1).0, 26);
-        assert_eq!(move_all(game, 2).0, 1194);
-        assert_eq!(move_all(game, 3).0, 33003);
-        //assert_eq!(move_all(game, 4).0, 1419244);
+        assert_eq!(total_moves(game, 0), 1);
+        assert_eq!(total_moves(game, 1), 26);
+        assert_eq!(total_moves(game, 2), 1194);
+        assert_eq!(total_moves(game, 3), 33003);
+        assert_eq!(total_moves(game, 4), 1419244);
     }
 
     #[test]
     fn temp_test_invalid_2() {
+        /*running 1 test
+        >>> rn2kb1r/pppq2pp/3p3n/3Ppp2/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq f6 3 7
+        21592 / 21591 at f7f5 checked 26
+        >>> rn2kb1r/pppq1ppp/3p4/3Ppn2/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq - 3 7
+        21040 / 21039 at h6f5 checked 25
+        >>> r3kb1r/pppq1ppp/2np3n/3Pp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq - 3 7
+        24931 / 24929 at b8c6 checked 26
+        test tests::temp_test_invalid_2 has been running for over 60 seconds
+        >>> rn2kb1r/ppp2ppp/3p3n/3Pp3/q3P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq - 3 7
+        23807 / 23805 at d7a4 checked 24
+        >>> rn2kb1r/ppp2ppp/3p3n/3Ppq2/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq - 3 7
+        21144 / 21143 at d7f5 checked 26*/
         let list2 = vec![
-            ("a2a3", 31),
-            ("b2b3", 31),
-            ("g2g3", 31),
-            ("h2h3", 31),
-            ("a2a4", 31),
-            ("b2b4", 32),
-            ("h2h4", 31),
-            ("d5c6", 30),
-            ("c3b1", 31),
-            ("c3a4", 31),
-            ("c3b5", 29),
-            ("e2e3", 31),
-            ("e2d3", 31),
-            ("e2d2", 31),
-            ("e2e1", 31),
-            ("d1d4", 33),
-            ("d1d3", 31),
-            ("d1d2", 31),
-            ("c1d2", 31),
-            ("c1e3", 31),
-            ("c1f4", 32),
-            ("c1g5", 28),
-            ("c1h6", 30),
-            ("a1b1", 31),
-            ("h1g1", 31),
-            ("d1e1", 31),
+            ("f5f4", 3),
+            ("a7a6", 35),
+            ("b7b6", 35),
+            ("c7c6", 36),
+            ("g7g6", 35),
+            ("a7a5", 35),
+            ("b7b5", 34),
+            ("c7c5", 36),
+            ("g7g5", 35),
+            ("f5e4", 35),
+            ("h6f7", 35),
+            ("h6g8", 35),
+            ("b8a6", 35),
+            ("b8c6", 36),
+            ("g4f3", 31),
+            ("g4h3", 35),
+            ("g4h5", 36),
+            ("f8e7", 35),
+            ("h8g8", 35),
+            ("d7a4", 34),
+            ("d7b5", 32),
+            ("d7c6", 36),
+            ("d7e6", 36),
+            ("d7e7", 35),
+            ("d7f7", 35),
+            ("d7c8", 35),
+            ("d7d8", 35),
+            ("e8e7", 35),
+            ("e8f7", 35),
+            ("e8d8", 35),
         ];
-        let fen2 = "rn2kb1r/pp1q1ppp/3p3n/2pPp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq c6 0 7";
+
+        let fen2 = "rn2kb1r/pppq2pp/3p3n/3Ppp2/4P1b1/2N1KN2/PPP2PPP/R1BQ1B1R b kq - 1 7";
         let dep2 = 2;
 
         for q in list2 {
@@ -224,49 +244,18 @@ mod tests {
             let moves = move_all(game, dep2 - 1);
             if moves.0 != q.1 {
                 let board2 = print_board(&game).unwrap(); //print_board(&game).unwrap();
-                 println!(">>> {}", board2);
-                 let game2 = get_board(board2).unwrap();
-                 let moves2 = move_all(game2, 1);
-                println!("{} / {} at {} checked {}", moves.0, q.1, q.0,moves2.0);
+                println!(">>> {}", board2);
+                let game2 = get_board(board2).unwrap();
+                let moves2 = move_all(game2, 1);
+                println!("{} / {} at {} checked {}", moves.0, q.1, q.0, moves2.0);
             }
         }
     }
 
     #[test]
     fn temp_test_invalid_1() {
-        let list = vec![
-            ("d6d5", 1),
-("a7a6", 1),
-("b7b6", 1),
-("f7f6", 1),
-("g7g6", 1),
-("a7a5", 1),
-("b7b5", 1),
-("f7f5", 1),
-("g7g5", 1),
-("b7c6", 1),
-("h6f5", 1),
-("h6g8", 1),
-("b8a6", 1),
-("b8c6", 1),
-("g4f3", 1),
-("g4h3", 1),
-("g4f5", 1),
-("g4h5", 1),
-("g4e6", 1),
-("f8e7", 1),
-("h8g8", 1),
-("d7f5", 1),
-("d7c6", 1),
-("d7e6", 1),
-("d7c7", 1),
-("d7e7", 1),
-("d7c8", 1),
-("d7d8", 1),
-("e8e7", 1),
-("e8d8", 1),
-        ];
-        let fen = "rn2kb1r/pp1q1ppp/2Pp3n/4p3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R b kq - 0 7";
+        let list = vec![("e3d2", 1), ("e3e2", 1), ("e3d3", 1)];
+        let fen = "rn2kb1r/pppq2pp/3p3n/3Pp3/4Ppb1/2N1KN2/PPP2PPP/R1BQ1B1R w kq - 0 8";
 
         let game2 = get_board(fen.to_string()).unwrap();
         let threatmap2 = generate_all_threats(&game2, !game2.is_white_to_move);
@@ -305,7 +294,7 @@ mod tests {
         }
 
         //if size != list.len() {
-            println!("QQ MOVE: {}", size);
+        println!("QQ MOVE: {}", size);
         //}
 
         for q in list.clone() {
