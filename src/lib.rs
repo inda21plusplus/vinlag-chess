@@ -70,7 +70,7 @@ mod tests {
                 .0
         );
     }
-    
+
     #[test]
     fn en_passant_test() {
         let str = "rn2kb1r/pp1q1ppp/3p3n/2pPp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq c6 0 7";
@@ -138,6 +138,7 @@ mod tests {
         assert_eq!(move_all(game, 1).0, 27);
         assert_eq!(move_all(game, 2).0, 671);
         assert_eq!(move_all(game, 3).0, 19218);
+        //assert_eq!(move_all(game, 4).0, 492460);
     }
 
     #[test]
@@ -150,6 +151,7 @@ mod tests {
         assert_eq!(move_all(game, 1).0, 32);
         assert_eq!(move_all(game, 2).0, 1173);
         assert_eq!(move_all(game, 3).0, 36787);
+        assert_eq!(move_all(game, 4).0, 1373011); // check 1373021 vs 1373011
     }
 
     #[test]
@@ -162,6 +164,20 @@ mod tests {
         assert_eq!(move_all(game, 1).0, 31);
         assert_eq!(move_all(game, 2).0, 767);
         assert_eq!(move_all(game, 3).0, 24016);
+        assert_eq!(move_all(game, 4).0, 679848); // check 679856 vs 679848
+    }
+
+    #[test]
+    fn run_deep_test_5() {
+        let game = get_board(
+            "rn1qkbnr/p1pb1pp1/1p1p3p/4p1B1/Q1PP4/2N3P1/PP2PP1P/R3KBNR b KQkq - 0 6".to_string(),
+        )
+        .unwrap();
+        assert_eq!(move_all(game, 0).0, 1);
+        assert_eq!(move_all(game, 1).0, 26);
+        assert_eq!(move_all(game, 2).0, 1194);
+        assert_eq!(move_all(game, 3).0, 33003);
+        //assert_eq!(move_all(game, 4).0, 1419244);
     }
 
     #[test]
