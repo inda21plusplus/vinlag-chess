@@ -423,7 +423,7 @@ pub fn get_board(fen_string: String) -> Option<Game> {
         };
     }
 
-    let en_passant_position = None::<Position>;
+    let en_passant_position = parse_position(&split[3]);
 
     let half_move_clock = split[4].parse::<u16>();
     if half_move_clock.is_err() {

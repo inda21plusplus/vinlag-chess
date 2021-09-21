@@ -20,18 +20,22 @@ fn main() {
     // rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5
 
     //rnb1k1nr/pppp1ppp/8/4P3/1p5q/5NP1/PPP1P2P/RNBQK2R w KQkq - 1 4
-    let mut game = get_board("rnbqkbnr/ppp1p2p/6p1/5p2/3p2P1/5P1N/PPPPP1BP/RNBQK2R w KQkq - 0 5".to_string()).unwrap();//get_board("4r3/8/8/8/8/4R3/8/4K3 w KQkq - 1 4".to_string()).unwrap();
+    let mut game = get_board("rn2kb1r/pp1q1ppp/3p3n/2pPp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq c6 0 7".to_string()).unwrap();//get_board("4r3/8/8/8/8/4R3/8/4K3 w KQkq - 1 4".to_string()).unwrap();
+    let pos =game.en_passant_position.unwrap();   
+    println!("{},{}",pos.x,pos.y); 
     let threats = generate_all_threats(&game, !game.is_white_to_move);
-    //generate_valid_moves(&game, &threats, &Position{x:4,y:0}); //
+     let qq =   generate_valid_moves(&game, &threats, &Position{x:3,y:3}); //
     let moves = generate_valid_moves_for_team(&game, &threats,true);
-    println!("sizecheck {} {} / 31", moves.len(), moves.contains(&parse_move("e5f4").unwrap().1));
+    println!("sizecheck {} {}", moves.len(), moves.contains(&parse_move("e5f4").unwrap().1));
     render_highlight(
         &game,
         vec![
-            (&threats.all_threats, termcolor::Color::Red),
+            //(&threats.all_threats, termcolor::Color::Red),
             //(&threats.all_threats_secondary[0], Color::Blue),
-            (&threats.all_king_threats_full, termcolor::Color::Green),
-            (&moves, termcolor::Color::Rgb(255, 165, 0)),
+            //(&threats.all_king_threats_full, termcolor::Color::Green),
+            //(&moves, termcolor::Color::Rgb(255, 165, 0)),
+            (&qq, termcolor::Color::Blue),
+            
         ],
     );
     return;

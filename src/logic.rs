@@ -649,27 +649,25 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: Position, move_end: Positi
         game.board[move_end.x][move_end.y] = start_piece;
         game.board[move_start.x][move_start.y] = EMPTY_PEICE;
     } else if start_piece.piece == Piece::Pawn {
-        game.board[move_end.x][move_end.y] = start_piece;
-        game.board[move_start.x][move_start.y] = EMPTY_PEICE;
-
         let move_direction: i8 = if is_white { -1 } else { 1 };
 
-        if game.en_passant_position.is_some() {
-            if move_end == game.en_passant_position.unwrap() {
-                let real_capture_unchecked = get_position(
-                    &move_end,
-                    &Vector2 {
-                        x: 0,
-                        y: move_direction,
-                    },
-                );
+        // en passant
+        if game.board[move_end.x][move_end.y].piece == Piece::None && (move_end.x != move_start.x) {
+            let real_capture_unchecked = get_position(
+                &move_end,
+                &Vector2 {
+                    x: 0,
+                    y: -move_direction,
+                },
+            );
 
-                // captures the real pawn and not just air
-                if real_capture_unchecked.is_some() {
-                    let real_capture = real_capture_unchecked.unwrap();
-                    //let real_capture_piece_data = game.board[real_capture.x][real_capture.y];
-
+            // captures the real pawn and not just air
+            if real_capture_unchecked.is_some() {
+                let real_capture = real_capture_unchecked.unwrap();
+                let real_capture_piece_data = game.board[real_capture.x][real_capture.y];
+                if real_capture_piece_data.is_white != is_white && real_capture_piece_data.piece == Piece::Pawn {
                     game.board[real_capture.x][real_capture.y] = EMPTY_PEICE;
+                    half_move_clock = 0;
                 }
             }
         } else if move_end.y as i8 - move_start.y as i8 == move_direction * 2 {
@@ -682,6 +680,9 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: Position, move_end: Positi
                 },
             )
         }
+
+        game.board[move_end.x][move_end.y] = start_piece;
+        game.board[move_start.x][move_start.y] = EMPTY_PEICE;
     } else if start_piece.piece == Piece::King {
         let offset_x = move_end.x as i8 - move_start.x as i8;
         let move_distance = i8::abs(offset_x); //i8::abs(move_start.y as i8 - move_end.y as i8) + i8::abs(offset_x);

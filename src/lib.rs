@@ -70,6 +70,17 @@ mod tests {
                 .0
         );
     }
+    
+    #[test]
+    fn en_passant_test() {
+        let str = "rn2kb1r/pp1q1ppp/3p3n/2pPp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq c6 0 7";
+        assert_eq!(
+            "rn2kb1r/pp1q1ppp/2Pp3n/4p3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R b kq - 0 7",
+            load_board(str, vec!["d5c6"])
+                .unwrap()
+                .0
+        );
+    }
 
     fn move_all(game: Game, depth: u32) -> (u32, u128) {
         if depth == 0 {
@@ -142,70 +153,104 @@ mod tests {
     }
 
     #[test]
+    fn run_deep_test_4() {
+        let game = get_board(
+            "rn2kb1r/pppq1ppp/3p3n/3Pp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R b kq - 2 6".to_string(),
+        )
+        .unwrap();
+        assert_eq!(move_all(game, 0).0, 1);
+        assert_eq!(move_all(game, 1).0, 31);
+        assert_eq!(move_all(game, 2).0, 767);
+        assert_eq!(move_all(game, 3).0, 24016);
+    }
+
+    #[test]
     fn temp_test_invalid_2() {
         let list2 = vec![
-            ("b2b3", 32),
-            ("f2f3", 32),
-            ("g2g3", 32),
-            ("h2h3", 32),
-            ("c4c5", 30),
-            ("b2b4", 31),
-            ("f2f4", 32),
-            ("h2h4", 32),
-            ("c4b5", 31),
-            ("g1f3", 32),
-            ("g1h3", 32),
-            ("a3b1", 32),
-            ("a3c2", 32),
-            ("a3b5", 31),
-            ("g5f4", 32),
-            ("g5h4", 32),
-            ("g5f6", 33),
-            ("g5h6", 31),
-            ("a1b1", 32),
-            ("a1c1", 32),
-            ("a1d1", 32),
-            ("e3c1", 32),
-            ("e3d2", 32),
-            ("e3b3", 32),
-            ("e3c3", 32),
-            ("e3d3", 32),
-            ("e3f3", 32),
-            ("e3g3", 32),
-            ("e3h3", 32),
-            ("e3d4", 25),
-            ("e3e4", 32),
-            ("e3f4", 32),
-            ("e3e5", 32),
-            ("e3e6", 30),
-            ("e3e7", 3),
-            ("e1d1", 32),
-            ("e1d2", 32),
-            ("e1c1", 32),
+            ("a2a3", 31),
+            ("b2b3", 31),
+            ("g2g3", 31),
+            ("h2h3", 31),
+            ("a2a4", 31),
+            ("b2b4", 32),
+            ("h2h4", 31),
+            ("d5c6", 30),
+            ("c3b1", 31),
+            ("c3a4", 31),
+            ("c3b5", 29),
+            ("e2e3", 31),
+            ("e2d3", 31),
+            ("e2d2", 31),
+            ("e2e1", 31),
+            ("d1d4", 33),
+            ("d1d3", 31),
+            ("d1d2", 31),
+            ("c1d2", 31),
+            ("c1e3", 31),
+            ("c1f4", 32),
+            ("c1g5", 28),
+            ("c1h6", 30),
+            ("a1b1", 31),
+            ("h1g1", 31),
+            ("d1e1", 31),
         ];
-        let fen2 = "r1bqkb1r/p1ppp1pp/5p2/1p4B1/2Pn2n1/N3Q3/PP2PPPP/R3KBNR w KQkq - 0 7";
+        let fen2 = "rn2kb1r/pp1q1ppp/3p3n/2pPp3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R w kq c6 0 7";
         let dep2 = 2;
 
         for q in list2 {
             let mut game = get_board(fen2.to_string()).unwrap();
             let temp_move = parse_move(q.0).unwrap();
-            move_piece_no_map(&mut game, temp_move.0, temp_move.1, true);
+            let flags = move_piece_no_map(&mut game, temp_move.0, temp_move.1, true);
+            if flags.contains(&MoveFlags::Invalid) {
+                println!("INVALID: {}", q.0);
+            }
 
             let moves = move_all(game, dep2 - 1);
             if moves.0 != q.1 {
-                //let board2 = print_board(&game).unwrap(); //print_board(&game).unwrap();
-                // println!(">>> {}", board2);
-                // let game2 = get_board(board2).unwrap();
-                // let moves2 = move_all(game2, 1);
-                println!("{} / {} at {}", moves.0, q.1, q.0);
+                let board2 = print_board(&game).unwrap(); //print_board(&game).unwrap();
+                 println!(">>> {}", board2);
+                 let game2 = get_board(board2).unwrap();
+                 let moves2 = move_all(game2, 1);
+                println!("{} / {} at {} checked {}", moves.0, q.1, q.0,moves2.0);
             }
         }
     }
 
     #[test]
     fn temp_test_invalid_1() {
-        let list = vec![("f8e7", 1), ("d8e7", 1), ("e8e7", 1)];
-        let fen = "r1bqkb1r/p1ppQ1pp/5p2/1p4B1/2Pn2n1/N7/PP2PPPP/R3KBNR b KQkq - 0 7";
+        let list = vec![
+            ("d6d5", 1),
+("a7a6", 1),
+("b7b6", 1),
+("f7f6", 1),
+("g7g6", 1),
+("a7a5", 1),
+("b7b5", 1),
+("f7f5", 1),
+("g7g5", 1),
+("b7c6", 1),
+("h6f5", 1),
+("h6g8", 1),
+("b8a6", 1),
+("b8c6", 1),
+("g4f3", 1),
+("g4h3", 1),
+("g4f5", 1),
+("g4h5", 1),
+("g4e6", 1),
+("f8e7", 1),
+("h8g8", 1),
+("d7f5", 1),
+("d7c6", 1),
+("d7e6", 1),
+("d7c7", 1),
+("d7e7", 1),
+("d7c8", 1),
+("d7d8", 1),
+("e8e7", 1),
+("e8d8", 1),
+        ];
+        let fen = "rn2kb1r/pp1q1ppp/2Pp3n/4p3/4P1b1/2N2N2/PPP1KPPP/R1BQ1B1R b kq - 0 7";
 
         let game2 = get_board(fen.to_string()).unwrap();
         let threatmap2 = generate_all_threats(&game2, !game2.is_white_to_move);
@@ -243,9 +288,9 @@ mod tests {
             }
         }
 
-        if size != list.len() {
+        //if size != list.len() {
             println!("QQ MOVE: {}", size);
-        }
+        //}
 
         for q in list.clone() {
             let mut game = get_board(fen.to_string()).unwrap();
