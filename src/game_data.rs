@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const BOARD_SIZE: usize = 8;
 pub const BLACK_SPAWN: usize = 0;
@@ -61,6 +61,17 @@ pub struct Position {
     pub y: usize,
 }
 
+/**You might want to implement names for the players or want to extend with any metadata then add it here */
+#[derive(Debug)]
+pub struct Gameboard {
+    /** all data used for the game logic */
+    pub game : Game,
+    /** 
+    Used for 3 fold repetition Format in FEN string
+    */
+    pub same_board : HashMap<String, u8>,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Game {
     /** 0,0 is the top left; 8,8 is the bottom right */
@@ -97,15 +108,11 @@ pub(crate) struct Moveset {
     pub(crate) inf_moves: &'static [Vector2],
 }
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, Ord, PartialOrd)]
-pub enum MoveFlags {
-    Invalid,
-    InvalidWaitingForPromotion,
-    Valid,
-    Capture,
-    BlackWon,
+pub enum WinStatus {
     WhiteWon,
+    BlackWon,
     Tie,
+    Nothing,
 }
 
 const DIAGONAL_MOVESET: &'static [Vector2; 4] = &[

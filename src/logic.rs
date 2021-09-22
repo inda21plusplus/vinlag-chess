@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::game_data::*;
+use crate::{game_data::*, parser::get_board_fen};
 
 fn get_position(pos: &Position, offset: &Vector2) -> Option<Position> {
     let new_position = Vector2 {
@@ -32,10 +32,7 @@ pub(crate) fn is_square_color(game: &Game, piece_position: &Position, is_white: 
 }
 
 /**
-Excludes casteling to not make an while true loop while
-first is all direct attacks
-second is all attacks with 1 piece blocking
-third is all direct threats to the king
+Excludes casteling to not make an while true loop
 */
 pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> ThreatMap {
     let mut all_moves: HashSet<Position> = HashSet::new();
@@ -288,6 +285,7 @@ fn get_promotion_pawn(game: &Game) -> Option<Position> {
     None
 }
 
+/** returns true if the promotion took place */
 pub fn promote_pawn(game: &mut Game, promotion: Piece) -> bool {
     // check for invalid input
     if promotion != Piece::Bishop
@@ -308,8 +306,12 @@ pub fn promote_pawn(game: &mut Game, promotion: Piece) -> bool {
     return true;
 }
 
+pub fn get_threats(game_board: &Gameboard)-> ThreatMap {
+    return generate_all_threats(&game_board.game,!game_board.game.is_white_to_move);
+}
+
 /** Includes all threat positions generate by that team */
-pub fn generate_all_threats(game: &Game, is_white: bool) -> ThreatMap {
+pub(crate) fn generate_all_threats(game: &Game, is_white: bool) -> ThreatMap {
     let mut all_moves: HashSet<Position> = HashSet::new();
     let mut all_threats: HashSet<Position> = HashSet::new();
     let mut all_pinned: Vec<HashSet<Position>> = Vec::new();
@@ -464,7 +466,7 @@ fn get_castle_positions(
     return moves;
 }
 
-pub fn generate_all_moves_and_castle(
+pub(crate) fn generate_all_moves_and_castle(
     game: &Game,
     other_team_threat_map: &ThreatMap,
     piece_position: &Position,
@@ -490,7 +492,8 @@ pub fn generate_all_moves_and_castle(
     return moves;
 }
 
-pub fn generate_valid_moves_for_team(
+/**Used for debugging */
+pub(crate) fn generate_valid_moves_for_team(
     game: &Game,
     other_team_threat_map: &ThreatMap,
     is_white: bool,
@@ -510,8 +513,15 @@ pub fn generate_valid_moves_for_team(
     return map;
 }
 
+pub fn get_all_valid_moves(game_board: &Gameboard,
+    other_team_threat_map: &ThreatMap,
+    piece_position: &Position,
+) -> HashSet<Position> {
+    return generate_valid_moves(&game_board.game,other_team_threat_map,piece_position);
+}
+
 /** TODO en passant fuckery */
-pub fn generate_valid_moves(
+pub(crate) fn generate_valid_moves(
     game: &Game,
     other_team_threat_map: &ThreatMap,
     piece_position: &Position,
@@ -627,7 +637,7 @@ fn remove_castle(game: &mut Game, pos: Position) {
 /** Will go horrible wrong if input is not checked, only use if you have checked the move beforehand with valid moves
 Will return true if move is done
 */
-pub fn move_piece_unsafe(game: &mut Game, move_start: Position, move_end: Position) -> bool {
+pub(crate) fn move_piece_unsafe(game: &mut Game, move_start: Position, move_end: Position) -> bool {
     let start_piece = game.board[move_start.x][move_start.y];
 
     if start_piece.piece == Piece::None {
@@ -640,7 +650,7 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: Position, move_end: Positi
 
     let capture_piece = game.board[move_end.x][move_end.y];
     // reset on any capture
-    if capture_piece.piece != Piece::None {
+    if capture_piece.piece != Piece::None || start_piece.piece == Piece::Pawn {
         half_move_clock = 0;
     }
 
@@ -664,9 +674,10 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: Position, move_end: Positi
             if real_capture_unchecked.is_some() {
                 let real_capture = real_capture_unchecked.unwrap();
                 let real_capture_piece_data = game.board[real_capture.x][real_capture.y];
-                if real_capture_piece_data.is_white != is_white && real_capture_piece_data.piece == Piece::Pawn {
+                if real_capture_piece_data.is_white != is_white
+                    && real_capture_piece_data.piece == Piece::Pawn
+                {
                     game.board[real_capture.x][real_capture.y] = EMPTY_PEICE;
-                    half_move_clock = 0;
                 }
             }
         } else if move_end.y as i8 - move_start.y as i8 == move_direction * 2 {
@@ -754,54 +765,123 @@ pub fn move_piece_unsafe(game: &mut Game, move_start: Position, move_end: Positi
     return true;
 }
 
-pub fn move_piece_no_map(
-    game: &mut Game,
+pub fn get_game_state(
+    game_board: &Gameboard,
+    other_team_threat_map: &ThreatMap,
+    force_3_fold_tie: bool,
+) -> WinStatus {
+    let mut can_move_anything = false;
+
+    for y in 0..BOARD_SIZE {
+        // fuck goto
+        if can_move_anything {
+            break;
+        }
+        for x in 0..BOARD_SIZE {
+            let piece_data = game_board.game.board[x][y];
+            if piece_data.is_white == game_board.game.is_white_to_move {
+                let moves = generate_valid_moves(
+                    &game_board.game,
+                    other_team_threat_map,
+                    &Position { x, y },
+                );
+                if moves.len() > 0 {
+                    can_move_anything = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if !can_move_anything {
+        // if cant move anything and king is threatend
+        if other_team_threat_map.all_king_threats.len() > 0 {
+            return if game_board.game.is_white_to_move {
+                WinStatus::BlackWon
+            } else {
+                WinStatus::WhiteWon
+            };
+        } else {
+            // if cant move anything and king is not threatend
+            return WinStatus::Tie;
+        }
+    }
+
+    // If the halfmove clock becomes greater or equal than 100,
+    // and the side to move has at least one legal move, a draw score should be assigned to that node,
+    // with appropriate protocol handling and game state transitions, if the node is already the root and there is no mate in one.
+    // https://www.chessprogramming.org/Fifty-move_Rule
+    if game_board.game.half_move_clock >= 100 {
+        return WinStatus::Tie;
+    }
+
+    let mut max_repetitions = 0;
+    for repetitions in game_board.same_board.values() {
+        if *repetitions > max_repetitions {
+            max_repetitions = *repetitions;
+        }
+    }
+
+    // In chess, the threefold repetition rule states that a player may claim a draw if the same position occurs three times
+    // By contrast, the fivefold repetition rule requires the arbiter to
+    // intervene and declare the game drawn if the same position occurs five times, and requires no claim by the players.
+    // https://en.wikipedia.org/wiki/Threefold_repetition
+    if (max_repetitions >= 3 && force_3_fold_tie) || (max_repetitions >= 5) {
+        return WinStatus::Tie;
+    }
+
+    return WinStatus::Nothing;
+}
+
+/**Used for debugging */
+pub(crate) fn move_piece_no_map(
+    game_board: &mut Gameboard,
     move_start: Position,
     move_end: Position,
     auto_promote: bool,
-) -> HashSet<MoveFlags> {
-    let threatmap = generate_all_threats(&game, !game.is_white_to_move);
-    return move_piece(game, move_start, move_end, &threatmap, auto_promote);
+) -> bool {
+    let threatmap = generate_all_threats(&game_board.game, !game_board.game.is_white_to_move);
+    return move_piece(game_board, move_start, move_end, &threatmap, auto_promote);
 }
 
 pub fn move_piece(
-    game: &mut Game,
+    game_board: &mut Gameboard,
     move_start: Position,
     move_end: Position,
     other_team_threat_map: &ThreatMap,
     auto_promote: bool,
-) -> HashSet<MoveFlags> {
-    let mut flags: HashSet<MoveFlags> = HashSet::new();
+) -> bool {
+    let game = &mut game_board.game;
 
     if get_promotion_pawn(game).is_some() {
-        flags.insert(MoveFlags::Invalid);
-        flags.insert(MoveFlags::InvalidWaitingForPromotion);
-        return flags;
+        return false;
     }
 
     // basic check first
     if !is_valid_move(game, &move_start, &move_end) {
-        flags.insert(MoveFlags::Invalid);
-        return flags;
+        return false;
     }
 
     if !generate_valid_moves(game, other_team_threat_map, &move_start).contains(&move_end) {
-        flags.insert(MoveFlags::Invalid);
-        return flags;
+        return false;
     }
 
     let start_piece = game.board[move_start.x][move_start.y];
 
     if move_piece_unsafe(game, move_start, move_end) {
-        flags.insert(MoveFlags::Valid);
-
         if start_piece.piece == Piece::Pawn && auto_promote {
             promote_pawn(game, Piece::Queen);
         }
 
-        return flags;
+        let fen = get_board_fen(game);
+        //this should always work
+        if fen.is_some() {
+            //adds 1 if found, else sets it to 1
+            *game_board.same_board.entry(fen.unwrap()).or_insert(0) += 1u8;
+        }
+
+        return true;
     } else {
-        flags.insert(MoveFlags::Invalid);
-        return flags;
+        return false;
     }
 }

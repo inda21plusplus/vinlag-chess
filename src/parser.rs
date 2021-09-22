@@ -1,5 +1,26 @@
+use std::collections::HashMap;
+
 use crate::game_data::*;
 pub const STANDARD_BOARD: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+pub fn init_game_board(fen : String) -> Option<Gameboard> {
+    let game = match get_board(fen) {
+        Some(g) => g,
+        None => return None,
+    };
+
+    let mut map = HashMap::new();
+    // inserts the standard board
+    map.insert(match get_board_fen(&game) {
+        Some(g) => g,
+        None => return None,
+    }, 1);
+
+    return Some(Gameboard {
+        game : game,
+        same_board : map,
+    });
+}
 
 #[test]
 fn parse_test_1() {
@@ -58,7 +79,7 @@ fn fen_test_no_castle() {
     let str = "rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQK2R w KQkq - 2 5";
     let board = get_board(str.to_string());
     assert!(board.is_some());
-    let board_string = print_board(&board.unwrap());
+    let board_string = get_fen(&board.unwrap());
     assert!(board_string.is_some());
     let valid_board_string = board_string.unwrap();
     assert_eq!(str, valid_board_string);
@@ -69,7 +90,7 @@ fn fen_test_one_castle() {
     let str = "rnbqk2r/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 b kq - 3 5";
     let board = get_board(str.to_string());
     assert!(board.is_some());
-    let board_string = print_board(&board.unwrap());
+    let board_string = get_fen(&board.unwrap());
     assert!(board_string.is_some());
     let valid_board_string = board_string.unwrap();
     assert_eq!(str, valid_board_string);
@@ -80,7 +101,7 @@ fn fen_test_both_castle() {
     let str = "rnbq1rk1/pppp2pp/3b1n2/4pp2/4PP2/3B1N2/PPPP2PP/RNBQ1RK1 w - - 4 6";
     let board = get_board(str.to_string());
     assert!(board.is_some());
-    let board_string = print_board(&board.unwrap());
+    let board_string = get_fen(&board.unwrap());
     assert!(board_string.is_some());
     let valid_board_string = board_string.unwrap();
     assert_eq!(str, valid_board_string);
@@ -110,16 +131,16 @@ fn parse_position(input: &str) -> Option<Position> {
     });
 }
 
-pub fn print_position(pos: Position) -> String {
+pub fn get_position(pos: Position) -> String {
     let mut str = String::new();
     str.push(BOARD_X_INPUT[pos.x]);
     str.push(BOARD_Y_INPUT[pos.y]);
     return str;
 }
 
-pub fn print_move(move_from: Position, move_to: Position) -> String {
-    let str1 = print_position(move_from);
-    let str2 = print_position(move_to);
+pub fn get_move(move_from: Position, move_to: Position) -> String {
+    let str1 = get_position(move_from);
+    let str2 = get_position(move_to);
     return format!("{}{}", str1, str2);
 }
 
@@ -244,12 +265,8 @@ fn parse_piece(input: char) -> Option<PieceData> {
     None
 }
 
-/** Forsyth–Edwards Notation https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
-start board for standard chess is rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
-*/
-pub fn print_board(game: &Game) -> Option<String> {
+pub(crate) fn get_board_fen(game: &Game) -> Option<String> {
     let mut output: String = String::new();
-
     // generate board
     for y in 0..BOARD_SIZE {
         let mut last_piece: u8 = 0;
@@ -275,6 +292,17 @@ pub fn print_board(game: &Game) -> Option<String> {
             output.push('/');
         }
     }
+    return Some(output);
+}
+
+/** Forsyth–Edwards Notation https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
+start board for standard chess is rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+*/
+pub fn get_fen(game: &Game) -> Option<String> {
+    let mut output = match get_board_fen(game) {
+        Some(fen) => fen,
+        None => return None  
+    };
 
     // white/black to move
     output.push(' ');
