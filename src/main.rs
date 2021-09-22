@@ -42,6 +42,7 @@ fn main() {
             }
             let (move_start, move_end) = player_move.unwrap();
 
+            // use promote_pawn if auto_promote is set to false
             if move_piece(&mut game_board, move_start, move_end, &threats, true) {
                 break;
             } else {

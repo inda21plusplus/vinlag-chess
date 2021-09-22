@@ -306,8 +306,8 @@ pub fn promote_pawn(game: &mut Game, promotion: Piece) -> bool {
     return true;
 }
 
-pub fn get_threats(game_board: &Gameboard)-> ThreatMap {
-    return generate_all_threats(&game_board.game,!game_board.game.is_white_to_move);
+pub fn get_threats(game_board: &Gameboard) -> ThreatMap {
+    return generate_all_threats(&game_board.game, !game_board.game.is_white_to_move);
 }
 
 /** Includes all threat positions generate by that team */
@@ -513,11 +513,12 @@ pub(crate) fn generate_valid_moves_for_team(
     return map;
 }
 
-pub fn get_all_valid_moves(game_board: &Gameboard,
+pub fn get_all_valid_moves(
+    game_board: &Gameboard,
     other_team_threat_map: &ThreatMap,
     piece_position: &Position,
 ) -> HashSet<Position> {
-    return generate_valid_moves(&game_board.game,other_team_threat_map,piece_position);
+    return generate_valid_moves(&game_board.game, other_team_threat_map, piece_position);
 }
 
 /** TODO en passant fuckery */
@@ -770,8 +771,31 @@ pub fn get_game_state(
     other_team_threat_map: &ThreatMap,
     force_3_fold_tie: bool,
 ) -> WinStatus {
-    let mut can_move_anything = false;
+    // first checks that both players has kings
+    let mut has_white_king = false;
+    let mut has_black_king = false;
+    for y in 0..BOARD_SIZE {
+        for x in 0..BOARD_SIZE {
+            let piece_data = game_board.game.board[x][y];
+            if piece_data.piece == Piece::King {
+                if piece_data.is_white {
+                    has_white_king = true;
+                } else {
+                    has_black_king = true;
+                }
+            }
+        }
+    }
 
+    if has_black_king && !has_white_king {
+        return WinStatus::BlackWon;
+    } else if !has_black_king && has_white_king {
+        return WinStatus::WhiteWon;
+    } else if !has_black_king && !has_white_king {
+        return WinStatus::Tie;
+    }
+
+    let mut can_move_anything = false;
     for y in 0..BOARD_SIZE {
         // fuck goto
         if can_move_anything {
@@ -828,6 +852,63 @@ pub fn get_game_state(
     // https://en.wikipedia.org/wiki/Threefold_repetition
     if (max_repetitions >= 3 && force_3_fold_tie) || (max_repetitions >= 5) {
         return WinStatus::Tie;
+    }
+
+    // https://www.chessprogramming.org/Draw_Evaluation
+    // fuck this
+
+    // if false if anyone has any Pawn Rook or Queen
+    let mut valid_draw = true;
+
+    let mut white_minor_pieces = 0u8;
+    let mut black_minor_pieces = 0u8;
+
+    let mut white_bishops : Vec<bool> = Vec::new();
+    let mut black_bishops : Vec<bool> = Vec::new();
+
+    for y in 0..BOARD_SIZE {
+        if !valid_draw {
+            break;
+        }
+        for x in 0..BOARD_SIZE {
+            let piece_data = game_board.game.board[x][y];
+            if piece_data.piece == Piece::Pawn
+                || piece_data.piece == Piece::Rook
+                || piece_data.piece == Piece::Queen
+            {
+                valid_draw = false;
+                break;
+            } else if piece_data.piece == Piece::Knight || piece_data.piece == Piece::Bishop {
+                if piece_data.is_white {
+                    white_minor_pieces += 1;
+                } else {
+                    black_minor_pieces += 1;
+                }
+
+                if piece_data.piece == Piece::Bishop {
+                    let is_dark_square = (y + x) % 2 == 0;
+                    if piece_data.is_white {
+                        white_bishops.push(is_dark_square);
+                    } else {
+                        black_bishops.push(is_dark_square);
+                    }
+                }
+            }
+        }
+    }
+
+    if valid_draw {
+        //One Side has a King and a Minor Piece against a bare King 
+        if (black_minor_pieces <= 1 && white_minor_pieces == 0)
+            || (black_minor_pieces == 0 && white_minor_pieces <= 1)
+        {
+            return WinStatus::Tie;
+        }
+
+        //Both Sides have a King and a Bishop, the Bishops being the same Color
+        if black_minor_pieces == 1 && white_minor_pieces == 1 && white_bishops.len() == 1 && black_bishops.len() == 1 && (white_bishops[0] == black_bishops[0]) {
+            return WinStatus::Tie;
+        }
     }
 
     return WinStatus::Nothing;

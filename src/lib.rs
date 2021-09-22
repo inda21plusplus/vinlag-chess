@@ -5,8 +5,6 @@ pub mod render;
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use crate::game_data::*;
     use crate::logic::*;
     use crate::parser::*;

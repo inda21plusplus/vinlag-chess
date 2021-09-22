@@ -292,17 +292,8 @@ pub(crate) fn get_board_fen(game: &Game) -> Option<String> {
             output.push('/');
         }
     }
-    return Some(output);
-}
 
-/** Forsyth–Edwards Notation https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
-start board for standard chess is rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
-*/
-pub fn get_fen(game: &Game) -> Option<String> {
-    let mut output = match get_board_fen(game) {
-        Some(fen) => fen,
-        None => return None  
-    };
+    
 
     // white/black to move
     output.push(' ');
@@ -350,6 +341,18 @@ pub fn get_fen(game: &Game) -> Option<String> {
     } else {
         output.push('-');
     }
+    
+    return Some(output);
+}
+
+/** Forsyth–Edwards Notation https://en.wikipedia.org/wiki/Forsyth%E2%80%93Edwards_Notation
+start board for standard chess is rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+*/
+pub fn get_fen(game: &Game) -> Option<String> {
+    let mut output = match get_board_fen(game) {
+        Some(fen) => fen,
+        None => return None  
+    };
     output.push(' ');
 
     output += &game.half_move_clock.to_string();
