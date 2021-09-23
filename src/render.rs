@@ -49,7 +49,7 @@ pub fn render(game: &Game) {
     render_highlight(game, Vec::new());
 }
 
-pub fn render_highlight(game: &Game, highlight_list : Vec<(&HashSet<Position>,Color)> ) {
+pub fn render_highlight(game: &Game, highlight_list: Vec<(&HashSet<Position>, Color)>) {
     let is_inverted = REVERSE_BOARD_ON_SWITCH && !game.is_white_to_move;
 
     for y in 0..BOARD_SIZE {
@@ -76,7 +76,7 @@ pub fn render_highlight(game: &Game, highlight_list : Vec<(&HashSet<Position>,Co
             for highlight in &highlight_list {
                 if highlight.0.contains(&Position { x, y }) {
                     bg_color = highlight.1;
-                } 
+                }
             }
 
             print_piece(

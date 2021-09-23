@@ -38,11 +38,11 @@ pub struct PieceData {
 }
 
 pub struct ThreatMap {
-    pub all_moves : HashSet<Position>,
-    pub all_threats : HashSet<Position>,
-    pub all_pinned : Vec<HashSet<Position>>,
-    pub all_king_threats : HashSet<Position>,
-    pub all_king_threats_full : HashSet<Position>,
+    pub all_moves: HashSet<Position>,
+    pub all_threats: HashSet<Position>,
+    pub all_pinned: Vec<HashSet<Position>>,
+    pub all_king_threats: HashSet<Position>,
+    pub all_king_threats_full: HashSet<Position>,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -50,8 +50,8 @@ pub struct Castle {
     pub can_castle_king_side: bool,
     pub can_castle_queen_side: bool,
 
-    pub queen_side_rook : Position,
-    pub king_side_rook : Position,
+    pub queen_side_rook: Position,
+    pub king_side_rook: Position,
 }
 
 /** 0,0 is the top left; 8,8 is the bottom right */
@@ -65,11 +65,11 @@ pub struct Position {
 #[derive(Debug)]
 pub struct Gameboard {
     /** all data used for the game logic */
-    pub game : Game,
-    /** 
+    pub game: Game,
+    /**
     Used for 3 fold repetition Format in FEN string
     */
-    pub same_board : HashMap<String, u8>,
+    pub same_board: HashMap<String, u8>,
 }
 
 #[derive(Debug, Clone, Copy)]

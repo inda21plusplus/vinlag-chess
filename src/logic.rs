@@ -863,8 +863,8 @@ pub fn get_game_state(
     let mut white_minor_pieces = 0u8;
     let mut black_minor_pieces = 0u8;
 
-    let mut white_bishops : Vec<bool> = Vec::new();
-    let mut black_bishops : Vec<bool> = Vec::new();
+    let mut white_bishops: Vec<bool> = Vec::new();
+    let mut black_bishops: Vec<bool> = Vec::new();
 
     for y in 0..BOARD_SIZE {
         if !valid_draw {
@@ -898,7 +898,7 @@ pub fn get_game_state(
     }
 
     if valid_draw {
-        //One Side has a King and a Minor Piece against a bare King 
+        //One Side has a King and a Minor Piece against a bare King
         if (black_minor_pieces <= 1 && white_minor_pieces == 0)
             || (black_minor_pieces == 0 && white_minor_pieces <= 1)
         {
@@ -906,7 +906,12 @@ pub fn get_game_state(
         }
 
         //Both Sides have a King and a Bishop, the Bishops being the same Color
-        if black_minor_pieces == 1 && white_minor_pieces == 1 && white_bishops.len() == 1 && black_bishops.len() == 1 && (white_bishops[0] == black_bishops[0]) {
+        if black_minor_pieces == 1
+            && white_minor_pieces == 1
+            && white_bishops.len() == 1
+            && black_bishops.len() == 1
+            && (white_bishops[0] == black_bishops[0])
+        {
             return WinStatus::Tie;
         }
     }

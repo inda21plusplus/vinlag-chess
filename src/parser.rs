@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::game_data::*;
 pub const STANDARD_BOARD: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-pub fn init_game_board(fen : String) -> Option<Gameboard> {
+pub fn init_game_board(fen: String) -> Option<Gameboard> {
     let game = match get_board(fen) {
         Some(g) => g,
         None => return None,
@@ -11,14 +11,17 @@ pub fn init_game_board(fen : String) -> Option<Gameboard> {
 
     let mut map = HashMap::new();
     // inserts the standard board
-    map.insert(match get_board_fen(&game) {
-        Some(g) => g,
-        None => return None,
-    }, 1);
+    map.insert(
+        match get_board_fen(&game) {
+            Some(g) => g,
+            None => return None,
+        },
+        1,
+    );
 
     return Some(Gameboard {
-        game : game,
-        same_board : map,
+        game: game,
+        same_board: map,
     });
 }
 
@@ -293,8 +296,6 @@ pub(crate) fn get_board_fen(game: &Game) -> Option<String> {
         }
     }
 
-    
-
     // white/black to move
     output.push(' ');
     output.push(if game.is_white_to_move { 'w' } else { 'b' });
@@ -341,7 +342,7 @@ pub(crate) fn get_board_fen(game: &Game) -> Option<String> {
     } else {
         output.push('-');
     }
-    
+
     return Some(output);
 }
 
@@ -351,7 +352,7 @@ start board for standard chess is rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w 
 pub fn get_fen(game: &Game) -> Option<String> {
     let mut output = match get_board_fen(game) {
         Some(fen) => fen,
-        None => return None  
+        None => return None,
     };
     output.push(' ');
 
