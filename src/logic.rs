@@ -1,6 +1,10 @@
 use std::collections::HashSet;
 
-use crate::{game_data::*, parser::get_board_fen};
+use crate::{
+    game_data::*,
+    parser::get_board_fen,
+    render::{render, render_highlight},
+};
 
 fn get_position(pos: &Position, offset: &Vector2) -> Option<Position> {
     let new_position = Vector2 {
@@ -68,26 +72,27 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Thre
                     x: 0,
                     y: move_direction,
                 },
-            )
-            .unwrap();
+            );
+            if pos_advance.is_some() {
+                let valid_pos_advance = pos_advance.unwrap();
+                if is_square_none(game, &valid_pos_advance) {
+                    all_moves.insert(valid_pos_advance);
 
-            if is_square_none(game, &pos_advance) {
-                all_moves.insert(pos_advance);
-
-                // if the pawn has not moved
-                if start_position == piece_position.y {
-                    let pos = get_position(
-                        piece_position,
-                        &Vector2 {
-                            x: 0,
-                            y: move_direction * 2,
-                        },
-                    )
-                    .unwrap();
-                    if is_square_none(game, &pos) {
-                        all_moves.insert(pos);
-                    }
-                };
+                    // if the pawn has not moved
+                    if start_position == piece_position.y {
+                        let pos = get_position(
+                            piece_position,
+                            &Vector2 {
+                                x: 0,
+                                y: move_direction * 2,
+                            },
+                        )
+                        .unwrap();
+                        if is_square_none(game, &pos) {
+                            all_moves.insert(pos);
+                        }
+                    };
+                }
             }
 
             // handle diagonal moves
@@ -112,7 +117,24 @@ pub(crate) fn generate_all_moves(game: &Game, piece_position: &Position) -> Thre
                 if game.en_passant_position.is_some()
                     && new_valid_position == game.en_passant_position.unwrap()
                 {
-                    all_moves.insert(new_valid_position);
+                    /*let real_capture_unchecked = get_position(
+                        &new_valid_position,
+                        &Vector2 {
+                            x: 0,
+                            y: -move_direction,
+                        },
+                    );*/
+                    // ye, this is a dirty solution, however it works
+                    //if real_capture_unchecked.is_some() {
+                    let mut clone_game = game.clone();
+                    move_piece_unsafe(&mut clone_game, *piece_position, new_valid_position);
+                    let other_threats =
+                        generate_all_threats(&clone_game, clone_game.is_white_to_move);
+                    let len = other_threats.all_king_threats.len();
+                    if len == 0 {
+                        all_moves.insert(new_valid_position);
+                    }
+                    //}
                 } else if !is_square_color(game, &new_valid_position, start_piece.is_white) {
                     // I dont want the pawn to be able to move sideways, but to threaten the sideways pieces
 
