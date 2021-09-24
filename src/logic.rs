@@ -1,10 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{
-    game_data::*,
-    parser::get_board_fen,
-    render::{render, render_highlight},
-};
+use crate::{game_data::*, parser::get_board_fen};
 
 fn get_position(pos: &Position, offset: &Vector2) -> Option<Position> {
     let new_position = Vector2 {
@@ -515,7 +511,7 @@ pub(crate) fn generate_all_moves_and_castle(
 }
 
 /**Used for debugging */
-pub(crate) fn generate_valid_moves_for_team(
+/*pub(crate) fn generate_valid_moves_for_team(
     game: &Game,
     other_team_threat_map: &ThreatMap,
     is_white: bool,
@@ -533,7 +529,7 @@ pub(crate) fn generate_valid_moves_for_team(
         }
     }
     return map;
-}
+}*/
 
 pub fn get_all_valid_moves(
     game_board: &Gameboard,
