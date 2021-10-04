@@ -6,7 +6,6 @@ mod render;
 
 use std::collections::HashSet;
 use std::process::exit;
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::{env, path};
 
 use chess_engine::game_data::{Gameboard, Piece, Position, ThreatMap, WinStatus};
@@ -101,7 +100,7 @@ struct InputStatus {
 
 pub struct MainState {
     frame: u64,
-    server: chess_server::Server,
+    server: Option<chess_server::Server>,
     render_config: RenderConfig,
     active_message: Option<PendingAction>,
     active_game: ActiveGame,
@@ -185,16 +184,16 @@ impl MainState {
 
         let (game, threats) = get_standard_game();
 
-        let message = None; /*Some(PendingAction {
-                                text: "Sluta spela?".to_string(),
-                                confirm: icons.confirm.clone(),
-                                cancel: icons.exit.clone(),
-                                confirm_value: Action::StartServer,
-                                cancel_value: Action::None,
-                            });*/
+        let message = Some(PendingAction {
+            text: "Start server?".to_string(),
+            confirm: icons.confirm.clone(),
+            cancel: icons.exit.clone(),
+            confirm_value: Action::StartServer,
+            cancel_value: Action::None,
+        });
 
         let s = MainState {
-            server: chess_server::start_server(),
+            server: None,
             frame: 0,
             render_config: RenderConfig {
                 spritesets: vec![regular_sprites, horsey_sprites, emoji_sprites],
@@ -334,7 +333,7 @@ fn handle_action(action: Action, state: &mut MainState) {
     match action {
         Action::StartClient => {}
         Action::StartServer => {
-
+            state.server = Some(chess_server::start_server());
             /*thread::spawn(|| {
                 let server_result = chess_server::start(state, network_callback);
                 if server_result.is_err() {
@@ -363,7 +362,6 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         do_game_logic(self);
-
 
         // render board
         render_clear(ctx);

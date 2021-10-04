@@ -25,7 +25,7 @@ pub(crate) fn start_server() -> Server {
         .set_nonblocking(true)
         .expect("failed to initialize non-blocking");
 
-    let mut clients = vec![];
+    let clients = vec![];
     let (tx, rx) = mpsc::channel::<(String, SocketAddr)>();
 
     return Server {
@@ -54,48 +54,57 @@ fn get_state(gameboard: &Gameboard, win_status: WinStatus) -> Option<String> {
 }
 
 pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
-    if let Ok((mut socket, addr)) = main_state.server.listener.accept() {
-        println!("Client {} connected", addr);
+    if let Some(server) = &mut main_state.server {
+        if let Ok((mut socket, addr)) = server.listener.accept() {
+            println!("Client {} connected", addr);
 
-        let tx = main_state.server.tx.clone();
-        main_state
-            .server
-            .clients
-            .push(socket.try_clone().expect("failed to clone client"));
+            let tx = server.tx.clone();
+            server
+                .clients
+                .push(socket.try_clone().expect("failed to clone client"));
 
-        // when a client joins, send them the board
-        tx.send(("get:board".to_string(), addr))
-            .expect("failed to send msg to rx");
+            // when a client joins, send them the board
+            tx.send(("get:board".to_string(), addr))
+                .expect("failed to send msg to rx");
 
-        thread::spawn(move || loop {
-            let mut buff = vec![0; MSG_SIZE];
+            thread::spawn(move || loop {
+                let mut buff = vec![0; MSG_SIZE];
 
-            match socket.read_exact(&mut buff) {
-                Ok(_) => {
-                    // 0x3B is unicode for ';'
-                    let msg = buff
-                        .into_iter()
-                        .take_while(|&x| (x != 0 && x != 0x3B))
-                        .collect::<Vec<_>>();
-                    let msg = String::from_utf8(msg).expect("Invalid utf8 message");
+                match socket.read_exact(&mut buff) {
+                    Ok(_) => {
+                        // 0x3B is unicode for ';'
+                        let msg = buff
+                            .into_iter()
+                            .take_while(|&x| (x != 0 && x != 0x3B))
+                            .collect::<Vec<_>>();
+                        let msg = String::from_utf8(msg).expect("Invalid utf8 message");
 
-                    println!("{}: {:?}", addr, msg);
-                    tx.send((msg, addr)).expect("failed to send msg to rx");
+                        println!("{}: {:?}", addr, msg);
+                        tx.send((msg, addr)).expect("failed to send msg to rx");
+                    }
+                    Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
+                    Err(_) => {
+                        println!("closing connection with: {}", addr);
+                        break;
+                    }
                 }
-                Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
-                Err(_) => {
-                    println!("closing connection with: {}", addr);
-                    break;
-                }
-            }
 
-            thread::sleep(std::time::Duration::from_millis(100)); // every connection gets a thread it looks
-        });
+                thread::sleep(std::time::Duration::from_millis(100)); // every connection gets a thread it looks
+            });
+        }
     }
 
     loop {
+        let mut recv: Result<(String, SocketAddr), mpsc::TryRecvError> =
+            Err(mpsc::TryRecvError::Empty);
+
+        // this has to be soooo messy because of rusts only one owner
+        if let Some(server) = &mut main_state.server {
+            recv = server.rx.try_recv();
+        }
+
         // do chess logic here
-        if let Ok((msg, addr)) = main_state.server.rx.try_recv() {
+        if let Ok((msg, addr)) = recv {
             let mut send_msg = msg.clone();
             let mut send_to_all = true;
 
@@ -126,7 +135,9 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                     "spectatorcount" => {
                         send_to_all = false;
                         let mut result = "spectatorcount:".to_string();
-                        result.push_str(&(main_state.server.clients.len() - 1).to_string());
+                        if let Some(server) = &mut main_state.server {
+                            result.push_str(&(server.clients.len() - 1).to_string());
+                        }
                         send_msg = result;
                     }
                     _ => {}
@@ -170,16 +181,18 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
             let mut buff = send_msg.into_bytes();
             buff.resize(MSG_SIZE, 0);
 
-            if send_to_all {
-                for client in &mut main_state.server.clients {
-                    let _write_error = client.write_all(&buff);
-                }
-            } else {
-                for client in &mut main_state.server.clients {
-                    let client_addr = client.peer_addr();
-                    if client_addr.is_ok() && client_addr.unwrap() == addr {
+            if let Some(server) = &mut main_state.server {
+                if send_to_all {
+                    for client in &mut server.clients {
                         let _write_error = client.write_all(&buff);
-                        break;
+                    }
+                } else {
+                    for client in &mut server.clients {
+                        let client_addr = client.peer_addr();
+                        if client_addr.is_ok() && client_addr.unwrap() == addr {
+                            let _write_error = client.write_all(&buff);
+                            break;
+                        }
                     }
                 }
             }
@@ -188,25 +201,26 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
         }
     }
 
-    // if the server has made a move, call all clientes
-    if main_state.active_game.penging_send {
-        main_state.active_game.penging_send = false;
-        let win_status = get_game_state(
-            &main_state.active_game.game,
-            &main_state.active_game.active_threats,
-            true,
-        );
-        let state = get_state(&main_state.active_game.game, win_status);
-        if state.is_some() {
-            let mut send_msg = state.unwrap();
-            send_msg.push(';');
-            let mut buff = send_msg.into_bytes();
-            buff.resize(MSG_SIZE, 0);
-            for client in &mut main_state.server.clients {
-                let _write_error = client.write_all(&buff);
+    if let Some(server) = &mut main_state.server {
+        // if the server has made a move, call all clientes
+        if main_state.active_game.penging_send {
+            main_state.active_game.penging_send = false;
+            let win_status = get_game_state(
+                &main_state.active_game.game,
+                &main_state.active_game.active_threats,
+                true,
+            );
+            let state = get_state(&main_state.active_game.game, win_status);
+            if state.is_some() {
+                let mut send_msg = state.unwrap();
+                send_msg.push(';');
+                let mut buff = send_msg.into_bytes();
+                buff.resize(MSG_SIZE, 0);
+                for client in &mut server.clients {
+                    let _write_error = client.write_all(&buff);
+                }
             }
         }
     }
-
     Ok(())
 }
