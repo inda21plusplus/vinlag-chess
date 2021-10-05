@@ -1,10 +1,8 @@
-use std::io::{self, ErrorKind, Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::TcpStream;
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
-use std::thread;
-use std::time::Duration;
 
 use chess_engine::game_data::WinStatus;
+use chess_engine::parser;
 
 use crate::{get_loaded_game, MainState};
 
@@ -59,8 +57,35 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
     }
 
     if is_connected {
+        if let Some((pending_move_from, pending_move_to, promotion)) =
+            main_state.active_game.pending_move
+        {
+            let mut send_msg = "move:".to_string();
+            send_msg.push_str(&parser::get_move(pending_move_from, pending_move_to));
+            send_msg.push(match promotion {
+                chess_engine::game_data::Piece::Bishop => 'b',
+                chess_engine::game_data::Piece::Rook => 'r',
+                chess_engine::game_data::Piece::Queen => 'q',
+                chess_engine::game_data::Piece::None => '-',
+                chess_engine::game_data::Piece::Pawn => '-',
+                chess_engine::game_data::Piece::Knight => 'n',
+                chess_engine::game_data::Piece::King => '-',
+            });
+            send_msg.push(';');
+
+            let mut buff = send_msg.into_bytes();
+            buff.resize(MSG_SIZE, 0);
+
+            if let Some(client) = &mut main_state.client {
+                let write_error = client.stream.write_all(&buff);
+                if write_error.is_ok() {
+                    main_state.active_game.pending_move = None;
+                }
+            }
+        }
+
         if let Some(msg) = handle_msg {
-            print!("MSG{} :",msg);
+            print!("MSG{} :", msg);
             let split: Vec<String> = msg.split(":").map(|s| s.to_string()).collect();
             if split.len() != 2 {
                 return;
@@ -68,12 +93,11 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
 
             let action = &split[0];
             let input = &split[1];
-            println!("ACTION: {},{}",action,input );
+            println!("ACTION: {},{}", action, input);
             match &action[..] {
                 "board" => {
-                    println!("GOT BOARD");
                     if let Some((game, threats)) = get_loaded_game(input.to_string()) {
-                        println!("LOADED BOARD");
+                        main_state.active_game.win_status = WinStatus::Nothing;
                         main_state.active_game.game = game;
                         main_state.active_game.active_threats = threats;
                     }
@@ -86,7 +110,7 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
                         None => WinStatus::Nothing,
                         _ => WinStatus::Nothing,
                     };
-                    
+
                     main_state.active_game.win_status = win_status;
 
                     if let Some((game, threats)) = get_loaded_game(input[1..].to_string()) {

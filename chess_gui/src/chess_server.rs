@@ -15,6 +15,7 @@ const MSG_SIZE: usize = 128;
 pub(crate) struct Server {
     listener: TcpListener,
     clients: Vec<TcpStream>,
+    move_client: Option<SocketAddr>,
     tx: Sender<(String, SocketAddr)>,
     rx: Receiver<(String, SocketAddr)>,
 }
@@ -33,6 +34,7 @@ pub(crate) fn start_server() -> Server {
         clients,
         tx,
         rx,
+        move_client: None,
     };
 }
 
@@ -57,6 +59,12 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
     if let Some(server) = &mut main_state.server {
         if let Ok((mut socket, addr)) = server.listener.accept() {
             println!("Client {} connected", addr);
+
+            // only one client can send inputs
+            if server.move_client.is_none() {
+                server.move_client = Some(addr);
+                println!("Client {} is now owner", addr);
+            }
 
             let tx = server.tx.clone();
             server
@@ -117,6 +125,12 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
             let input = &split[1];
             println!("[{}],[{}]", action, input);
             match &action[..] {
+                "request" => match &input[..] {
+                    "rematch" => {
+                        //rematch? not agreed upon yet
+                    }
+                    _ => (),
+                },
                 "get" => match &input[..] {
                     "board" => {
                         send_to_all = false;
@@ -140,9 +154,16 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                         }
                         send_msg = result;
                     }
-                    _ => {}
+                    _ => continue,
                 },
                 "move" => {
+                    // if the wrong client sends a move then continue
+                    if let Some(server) = &mut main_state.server {
+                        if Some(addr) != server.move_client {
+                            continue;
+                        }
+                    }
+
                     if input.len() != 5 {
                         continue;
                     };
@@ -163,9 +184,13 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
 
                     let piece_data =
                         main_state.active_game.game.game.board[move_from.x][move_from.y];
+
                     if !piece_data.is_white && piece_data.piece != Piece::None {
                         let win_status =
                             move_piece_with_state(main_state, move_from, move_to, promotion);
+                        main_state.active_game.win_status = win_status;
+                        println!("STATE::: {:?}" , main_state.active_game.win_status);
+
                         let state = get_state(&main_state.active_game.game, win_status);
                         if state.is_some() {
                             send_msg = state.unwrap();
@@ -177,7 +202,7 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                         send_msg = "err:invalid_move".to_string()
                     }
                 }
-                _ => (),
+                _ => continue,
             }
 
             send_msg.push(';');

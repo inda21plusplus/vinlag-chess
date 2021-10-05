@@ -52,6 +52,7 @@ struct ActiveGame {
     hover_position: Option<Vec2>,
     possible_moves: Option<HashSet<Position>>,
     penging_send: bool,
+    pending_move: Option<(Position, Position, Piece)>,
 }
 
 struct Icons {
@@ -63,7 +64,7 @@ struct Icons {
     confirm: graphics::Image,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Action {
     StartServer,
     StartClient,
@@ -217,6 +218,7 @@ impl MainState {
                 possible_moves: None,
                 penging_send: true,
                 win_status: WinStatus::Nothing,
+                pending_move: None,
             },
             input_staus: InputStatus {
                 pos_x: 0.0,
@@ -231,6 +233,7 @@ impl MainState {
     }
 }
 
+/** Will move a piece, promote it and regenerate the threatmap and will return the winstatus */
 fn move_piece_with_state(
     state: &mut MainState,
     move_from: Position,
@@ -249,19 +252,19 @@ fn move_piece_with_state(
         let threats = get_threats(&state.active_game.game);
         let win_status = get_game_state(&mut state.active_game.game, &threats, true);
         state.active_game.active_threats = threats;
-
+        
         return win_status;
-        //break;
     } else {
         println!("Invalid move")
     }
     return WinStatus::Nothing;
 }
 
-/** Handle user input logic to move pieces */
+/** Handle user input logic to move pieces and networking */
 fn do_game_logic(main_state: &mut MainState) {
+    // handle server and client multiplayer
     let _server_result = chess_server::server_loop(main_state);
-    let _server_result = chess_client::client_loop(main_state);
+    let _client_result = chess_client::client_loop(main_state);
 
     let input = &main_state.input_staus;
     let state = &mut main_state.active_game;
@@ -277,8 +280,16 @@ fn do_game_logic(main_state: &mut MainState) {
                 let seleted_square_safe = selected_square.unwrap();
                 let piece_data =
                     state.game.game.board[seleted_square_safe.x][seleted_square_safe.y];
-                if piece_data.is_white == state.game.game.is_white_to_move
+                let is_white_to_move = state.game.game.is_white_to_move;
+
+                // cant touch a piece if it is none or if the user does not have controll over it (server and client)
+                // server is always white and cant move black pieces, reverse for client
+                if piece_data.is_white == is_white_to_move
                     && piece_data.piece != Piece::None
+                    && (main_state.server.is_none()
+                        || (main_state.server.is_some() && is_white_to_move))
+                    && (main_state.client.is_none()
+                        || (main_state.client.is_some() && !is_white_to_move))
                 {
                     state.selected_square = selected_square;
                     state.possible_moves = Some(get_all_valid_moves(
@@ -309,8 +320,19 @@ fn do_game_logic(main_state: &mut MainState) {
             {
                 let move_to = move_square.unwrap();
                 let move_from = state.selected_square.unwrap();
-                move_piece_with_state(main_state, move_from, move_to, Piece::Queen);
-                main_state.active_game.penging_send = true;
+                let win_status = move_piece_with_state(main_state, move_from, move_to, Piece::Queen);
+                main_state.active_game.win_status = win_status;
+
+                // if server is active ping all clients with an update
+                if main_state.server.is_some() {
+                    main_state.active_game.penging_send = true;
+                }
+
+                // if it is client then send the move to the server
+                //TODO Promotion to rook, knight and bishop
+                if main_state.client.is_some() {
+                    main_state.active_game.pending_move = Some((move_from, move_to, Piece::Queen));
+                }
             }
         } else {
             state.possible_moves = None;
@@ -327,16 +349,15 @@ fn handle_action(action: Action, state: &mut MainState) {
         }
         Action::StartServer => {
             state.server = Some(chess_server::start_server());
-            /*thread::spawn(|| {
-                let server_result = chess_server::start(state, network_callback);
-                if server_result.is_err() {
-                    println!("Server Error");
-                }
-            })*/
         }
         Action::Restart => {
+            // a client cant restart, TODO reqest:rematch;
+            if state.client.is_some() {
+                return;
+            }
             let (game, threats) = get_loaded_game(STANDARD_BOARD.to_string()).unwrap();
             state.active_game.game = game;
+            state.active_game.win_status = WinStatus::Nothing;
             state.active_game.active_threats = threats;
             state.active_game.hover_position = None;
             state.active_game.possible_moves = None;
@@ -374,6 +395,15 @@ impl event::EventHandler<ggez::GameError> for MainState {
                     confirm_value: Action::Restart,
                     cancel_value: Action::None,
                 })
+            }
+        } else {
+            // will remove message if it is a promt to restart if the game has been reset by host
+            // also will ensure that you cant pop up a menu to restart mid game as client
+            if self.client.is_some()
+                && self.active_game.win_status == WinStatus::Nothing
+                && self.active_message.as_ref().unwrap().confirm_value == Action::Restart
+            {
+                self.active_message = None;
             }
         }
 
