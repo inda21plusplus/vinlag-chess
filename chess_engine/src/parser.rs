@@ -4,6 +4,7 @@ use crate::game_data::*;
 pub const STANDARD_BOARD: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 pub fn init_game_board(fen: String) -> Option<Gameboard> {
+    println!("FEN {}",fen);
     let game = match get_board(fen) {
         Some(g) => g,
         None => return None,
@@ -20,7 +21,7 @@ pub fn init_game_board(fen: String) -> Option<Gameboard> {
     );
 
     return Some(Gameboard {
-        game: game,
+        game,
         same_board: map,
     });
 }
@@ -268,7 +269,7 @@ fn parse_piece(input: char) -> Option<PieceData> {
     None
 }
 
-pub fn get_board_fen(game: &Game) -> Option<String> {
+pub(crate) fn get_board_fen(game: &Game) -> Option<String> {
     let mut output: String = String::new();
     // generate board
     for y in 0..BOARD_SIZE {
@@ -307,10 +308,10 @@ pub fn get_board_fen(game: &Game) -> Option<String> {
     if !game.castle[0].can_castle_king_side && !game.castle[0].can_castle_queen_side {
         cant_castle += 1;
     } else {
-        if game.castle[1].can_castle_king_side {
+        if game.castle[0].can_castle_king_side {
             output.push('K');
         }
-        if game.castle[1].can_castle_queen_side {
+        if game.castle[0].can_castle_queen_side {
             output.push('Q');
         }
     }
@@ -470,10 +471,10 @@ pub fn get_board(fen_string: String) -> Option<Game> {
     }
 
     let game = Game {
-        board: board,
+        board,
         castle: [white_castle, black_castle],
-        is_white_to_move: is_white_to_move,
-        en_passant_position: en_passant_position,
+        is_white_to_move,
+        en_passant_position,
         half_move_clock: half_move_clock.unwrap(),
         full_move_clock: full_move_clock.unwrap(),
     };

@@ -37,7 +37,7 @@ pub(crate) fn start_server() -> Server {
 }
 
 fn get_state(gameboard: &Gameboard, win_status: WinStatus) -> Option<String> {
-    let fen = &parser::get_board_fen(&gameboard.game);
+    let fen = &parser::get_fen(&gameboard.game);
     if fen.is_none() {
         return None;
     }
@@ -146,7 +146,6 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                     if input.len() != 5 {
                         continue;
                     };
-                    println!("Preformed move 1");
 
                     let (move_from, move_to) = match parser::parse_move(&input[0..4].to_string()) {
                         Some(t) => t,
@@ -162,19 +161,23 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                         _ => Piece::Queen,
                     };
 
-                    println!("Preformed move 2");
-                    let win_status =
-                        move_piece_with_state(main_state, move_from, move_to, promotion);
-                    let state = get_state(&main_state.active_game.game, win_status);
-                    if state.is_some() {
-                        send_msg = state.unwrap();
+                    let piece_data =
+                        main_state.active_game.game.game.board[move_from.x][move_from.y];
+                    if !piece_data.is_white && piece_data.piece != Piece::None {
+                        let win_status =
+                            move_piece_with_state(main_state, move_from, move_to, promotion);
+                        let state = get_state(&main_state.active_game.game, win_status);
+                        if state.is_some() {
+                            send_msg = state.unwrap();
+                        } else {
+                            send_msg = "err:state_invalid".to_string()
+                        }
                     } else {
-                        send_msg = "err:state_invalid".to_string()
+                        send_to_all = false;
+                        send_msg = "err:invalid_move".to_string()
                     }
                 }
-                _ => {
-                    println!("Normal msg");
-                }
+                _ => (),
             }
 
             send_msg.push(';');

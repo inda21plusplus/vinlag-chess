@@ -1,6 +1,7 @@
 //! The simplest possible example that does something.
 #![allow(clippy::unnecessary_wraps)]
 
+mod chess_client;
 mod chess_server;
 mod render;
 
@@ -46,6 +47,7 @@ struct FontSet {
 struct ActiveGame {
     game: Gameboard,
     active_threats: ThreatMap,
+    win_status: WinStatus,
     selected_square: Option<Position>,
     hover_position: Option<Vec2>,
     possible_moves: Option<HashSet<Position>>,
@@ -101,6 +103,7 @@ struct InputStatus {
 pub struct MainState {
     frame: u64,
     server: Option<chess_server::Server>,
+    client: Option<chess_client::Client>,
     render_config: RenderConfig,
     active_message: Option<PendingAction>,
     active_game: ActiveGame,
@@ -146,10 +149,13 @@ macro_rules! add_sprite_sheet {
     }};
 }
 
-fn get_standard_game() -> (Gameboard, ThreatMap) {
-    let board = chess_engine::parser::init_game_board(STANDARD_BOARD.to_string()).unwrap();
-    let threats = get_threats(&board);
-    return (board, threats);
+fn get_loaded_game(board: String) -> Option<(Gameboard, ThreatMap)> {
+    if let Some(board) = chess_engine::parser::init_game_board(board) {
+        println!("PARSED: ");
+        let threats = get_threats(&board);
+        return Some((board, threats));
+    }
+    return None;
 }
 
 impl MainState {
@@ -182,18 +188,19 @@ impl MainState {
             confirm: add_png!(ctx, "confirm"),
         };
 
-        let (game, threats) = get_standard_game();
+        let (game, threats) = get_loaded_game(STANDARD_BOARD.to_string()).unwrap();
 
         let message = Some(PendingAction {
             text: "Start server?".to_string(),
             confirm: icons.confirm.clone(),
             cancel: icons.exit.clone(),
             confirm_value: Action::StartServer,
-            cancel_value: Action::None,
+            cancel_value: Action::StartClient,
         });
 
         let s = MainState {
             server: None,
+            client: None,
             frame: 0,
             render_config: RenderConfig {
                 spritesets: vec![regular_sprites, horsey_sprites, emoji_sprites],
@@ -209,6 +216,7 @@ impl MainState {
                 hover_position: None,
                 possible_moves: None,
                 penging_send: true,
+                win_status: WinStatus::Nothing,
             },
             input_staus: InputStatus {
                 pos_x: 0.0,
@@ -242,24 +250,6 @@ fn move_piece_with_state(
         let win_status = get_game_state(&mut state.active_game.game, &threats, true);
         state.active_game.active_threats = threats;
 
-        if win_status != WinStatus::Nothing {
-            // updates the popup message asking to play again
-            let text = match win_status {
-                WinStatus::Tie => "Oavgjort, Spela igen?".to_string(),
-                WinStatus::WhiteWon => "Vit vann, Spela igen?".to_string(),
-                WinStatus::BlackWon => "Svart vann, Spela igen?".to_string(),
-                WinStatus::Nothing => "".to_string(),
-            };
-
-            state.input_staus.mouse_released = false;
-            state.active_message = Some(PendingAction {
-                text,
-                confirm: state.render_config.icons.confirm.clone(),
-                cancel: state.render_config.icons.exit.clone(),
-                confirm_value: Action::Restart,
-                cancel_value: Action::None,
-            })
-        }
         return win_status;
         //break;
     } else {
@@ -271,6 +261,7 @@ fn move_piece_with_state(
 /** Handle user input logic to move pieces */
 fn do_game_logic(main_state: &mut MainState) {
     let _server_result = chess_server::server_loop(main_state);
+    let _server_result = chess_client::client_loop(main_state);
 
     let input = &main_state.input_staus;
     let state = &mut main_state.active_game;
@@ -331,7 +322,9 @@ fn do_game_logic(main_state: &mut MainState) {
 /** Handle action triggered by a popup */
 fn handle_action(action: Action, state: &mut MainState) {
     match action {
-        Action::StartClient => {}
+        Action::StartClient => {
+            state.client = chess_client::start_client();
+        }
         Action::StartServer => {
             state.server = Some(chess_server::start_server());
             /*thread::spawn(|| {
@@ -342,7 +335,7 @@ fn handle_action(action: Action, state: &mut MainState) {
             })*/
         }
         Action::Restart => {
-            let (game, threats) = get_standard_game();
+            let (game, threats) = get_loaded_game(STANDARD_BOARD.to_string()).unwrap();
             state.active_game.game = game;
             state.active_game.active_threats = threats;
             state.active_game.hover_position = None;
@@ -362,6 +355,27 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         do_game_logic(self);
+
+        if self.active_message.is_none() {
+            if self.active_game.win_status != WinStatus::Nothing {
+                // updates the popup message asking to play again
+                let text = match self.active_game.win_status {
+                    WinStatus::Tie => "Oavgjort, Spela igen?".to_string(),
+                    WinStatus::WhiteWon => "Vit vann, Spela igen?".to_string(),
+                    WinStatus::BlackWon => "Svart vann, Spela igen?".to_string(),
+                    WinStatus::Nothing => "".to_string(),
+                };
+
+                self.input_staus.mouse_released = false;
+                self.active_message = Some(PendingAction {
+                    text,
+                    confirm: self.render_config.icons.confirm.clone(),
+                    cancel: self.render_config.icons.exit.clone(),
+                    confirm_value: Action::Restart,
+                    cancel_value: Action::None,
+                })
+            }
+        }
 
         // render board
         render_clear(ctx);
