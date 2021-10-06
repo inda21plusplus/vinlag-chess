@@ -1,4 +1,4 @@
-use std::io::{ErrorKind, Read, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::net::TcpStream;
 
 use chess_engine::game_data::WinStatus;
@@ -6,7 +6,7 @@ use chess_engine::parser;
 
 use crate::{get_loaded_game, MainState};
 
-const LOCAL: &str = "127.0.0.1:6000";
+const LOCAL: &str = "127.0.0.1:1337";
 const MSG_SIZE: usize = 128;
 
 pub(crate) struct Client {
@@ -27,6 +27,8 @@ pub(crate) fn start_client() -> Option<Client> {
             //  tx,
             //  rx,
         });
+    } else {
+        println!("Failed to connect to {}", LOCAL);
     }
 
     return None;
@@ -34,24 +36,24 @@ pub(crate) fn start_client() -> Option<Client> {
 
 pub(crate) fn client_loop(main_state: &mut MainState) {
     let mut is_connected = true;
-    let mut handle_msg: Option<String> = None;
+    let mut handle_msg: Vec<String> = Vec::new();
 
     if let Some(client) = &mut main_state.client {
-        let mut buff = vec![0; MSG_SIZE];
-        match client.stream.read_exact(&mut buff) {
-            Ok(_) => {
-                let msg = buff
-                    .into_iter()
-                    .take_while(|&x| x != 0 && x != 0x3B)
-                    .collect::<Vec<_>>();
-                let return_message = String::from_utf8_lossy(&msg);
-                println!("message recv {:?}", return_message);
-                handle_msg = Some(return_message.to_string());
-            }
-            Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
-            Err(_) => {
-                println!("connection with server was severed");
-                is_connected = false;
+        let read_buffer = BufReader::new(&mut client.stream);
+        let mut split = read_buffer.split(b';');
+        while let Some(read) = split.next() {
+            match read {
+                Ok(msg) => {
+                    let return_message = String::from_utf8_lossy(&msg);
+                    println!("message recv {:?}", return_message);
+                    handle_msg.push(return_message.to_string());
+                }
+                Err(ref err) if err.kind() == ErrorKind::WouldBlock => break,
+                Err(_) => {
+                    println!("connection with server was severed");
+                    is_connected = false;
+                    break;
+                }
             }
         }
     }
@@ -84,8 +86,8 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
             }
         }
 
-        if let Some(msg) = handle_msg {
-            print!("MSG{} :", msg);
+        for msg in handle_msg {
+            println!("GET : {}", msg);
             let split: Vec<String> = msg.split(":").map(|s| s.to_string()).collect();
             if split.len() != 2 {
                 return;
@@ -93,7 +95,7 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
 
             let action = &split[0];
             let input = &split[1];
-            println!("ACTION: {},{}", action, input);
+
             match &action[..] {
                 "board" => {
                     if let Some((game, threats)) = get_loaded_game(input.to_string()) {

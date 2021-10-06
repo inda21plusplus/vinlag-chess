@@ -4,7 +4,6 @@ use crate::game_data::*;
 pub const STANDARD_BOARD: &str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 pub fn init_game_board(fen: String) -> Option<Gameboard> {
-    println!("FEN {}",fen);
     let game = match get_board(fen) {
         Some(g) => g,
         None => return None,

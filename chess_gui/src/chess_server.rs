@@ -1,4 +1,4 @@
-use std::io::{ErrorKind, Read, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -9,7 +9,7 @@ use chess_engine::parser;
 
 use crate::{move_piece_with_state, MainState};
 
-const LOCAL: &str = "127.0.0.1:6000";
+const LOCAL: &str = "127.0.0.1:1337";
 const MSG_SIZE: usize = 128;
 
 pub(crate) struct Server {
@@ -38,7 +38,7 @@ pub(crate) fn start_server() -> Server {
     };
 }
 
-fn get_state(gameboard: &Gameboard, win_status: WinStatus) -> Option<String> {
+fn get_state_msg(gameboard: &Gameboard, win_status: WinStatus) -> Option<String> {
     let fen = &parser::get_fen(&gameboard.game);
     if fen.is_none() {
         return None;
@@ -55,9 +55,19 @@ fn get_state(gameboard: &Gameboard, win_status: WinStatus) -> Option<String> {
     return Some(win_status_prefix);
 }
 
+fn get_status_msg(main_state: &mut MainState) -> Option<String> {
+    let win_status = get_game_state(
+        &main_state.active_game.game,
+        &main_state.active_game.active_threats,
+        true,
+    );
+
+    get_state_msg(&main_state.active_game.game, win_status)
+}
+
 pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
     if let Some(server) = &mut main_state.server {
-        if let Ok((mut socket, addr)) = server.listener.accept() {
+        while let Ok((mut socket, addr)) = server.listener.accept() {
             println!("Client {} connected", addr);
 
             // only one client can send inputs
@@ -75,29 +85,24 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
             tx.send(("get:board".to_string(), addr))
                 .expect("failed to send msg to rx");
 
-            thread::spawn(move || loop {
-                let mut buff = vec![0; MSG_SIZE];
+            thread::spawn(move || {
+                let read_buffer = BufReader::new(&mut socket);
+                let mut split = read_buffer.split(b';');
+                while let Some(read) = split.next() {
+                    match read {
+                        Ok(msg) => {
+                            let msg = String::from_utf8(msg).expect("Invalid utf8 message");
 
-                match socket.read_exact(&mut buff) {
-                    Ok(_) => {
-                        // 0x3B is unicode for ';'
-                        let msg = buff
-                            .into_iter()
-                            .take_while(|&x| (x != 0 && x != 0x3B))
-                            .collect::<Vec<_>>();
-                        let msg = String::from_utf8(msg).expect("Invalid utf8 message");
-
-                        println!("{}: {:?}", addr, msg);
-                        tx.send((msg, addr)).expect("failed to send msg to rx");
-                    }
-                    Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
-                    Err(_) => {
-                        println!("closing connection with: {}", addr);
-                        break;
+                            println!("{}: {:?}", addr, msg);
+                            tx.send((msg, addr)).expect("failed to send msg to rx");
+                        }
+                        Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
+                        Err(_) => {
+                            println!("closing connection with: {}", addr);
+                            break;
+                        }
                     }
                 }
-
-                thread::sleep(std::time::Duration::from_millis(100)); // every connection gets a thread it looks
             });
         }
     }
@@ -134,14 +139,9 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                 "get" => match &input[..] {
                     "board" => {
                         send_to_all = false;
-                        let win_status = get_game_state(
-                            &main_state.active_game.game,
-                            &main_state.active_game.active_threats,
-                            true,
-                        );
-                        let state = get_state(&main_state.active_game.game, win_status);
-                        if state.is_some() {
-                            send_msg = state.unwrap();
+
+                        if let Some(state) = get_status_msg(main_state) {
+                            send_msg = state;
                         } else {
                             send_msg = "err:state_invalid".to_string()
                         }
@@ -159,47 +159,64 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                 "move" => {
                     // if the wrong client sends a move then continue
                     if let Some(server) = &mut main_state.server {
-                        if Some(addr) != server.move_client {
-                            continue;
-                        }
-                    }
+                        let is_invalid_client = Some(addr) != server.move_client;
+                        let is_invalid_length = input.len() != 5;
+                        if is_invalid_client || is_invalid_length {
+                            // is wrong client to move or invalid input
+                            send_to_all = false;
 
-                    if input.len() != 5 {
-                        continue;
-                    };
+                            if let Some(state) = get_status_msg(main_state) {
+                                let msg = if is_invalid_client {
+                                    "err:invalid_client"
+                                } else {
+                                    "err:invalid_length"
+                                };
 
-                    let (move_from, move_to) = match parser::parse_move(&input[0..4].to_string()) {
-                        Some(t) => t,
-                        None => continue,
-                    };
-
-                    let promotion = match input.chars().nth(4) {
-                        Some('q') => Piece::Queen,
-                        Some('r') => Piece::Rook,
-                        Some('b') => Piece::Bishop,
-                        Some('n') => Piece::Knight,
-                        None => Piece::Queen,
-                        _ => Piece::Queen,
-                    };
-
-                    let piece_data =
-                        main_state.active_game.game.game.board[move_from.x][move_from.y];
-
-                    if !piece_data.is_white && piece_data.piece != Piece::None {
-                        let win_status =
-                            move_piece_with_state(main_state, move_from, move_to, promotion);
-                        main_state.active_game.win_status = win_status;
-                        println!("STATE::: {:?}" , main_state.active_game.win_status);
-
-                        let state = get_state(&main_state.active_game.game, win_status);
-                        if state.is_some() {
-                            send_msg = state.unwrap();
+                                send_msg = state + ";" + msg;
+                            } else {
+                                send_msg = "err:state_invalid".to_string()
+                            }
                         } else {
-                            send_msg = "err:state_invalid".to_string()
+                            let (move_from, move_to) =
+                                match parser::parse_move(&input[0..4].to_string()) {
+                                    Some(t) => t,
+                                    None => continue,
+                                };
+
+                            let promotion = match input.chars().nth(4) {
+                                Some('q') => Piece::Queen,
+                                Some('r') => Piece::Rook,
+                                Some('b') => Piece::Bishop,
+                                Some('n') => Piece::Knight,
+                                None => Piece::Queen,
+                                _ => Piece::Queen,
+                            };
+
+                            let piece_data =
+                                main_state.active_game.game.game.board[move_from.x][move_from.y];
+
+                            if !piece_data.is_white && piece_data.piece != Piece::None {
+                                let win_status = move_piece_with_state(
+                                    main_state, move_from, move_to, promotion,
+                                );
+                                main_state.active_game.win_status = win_status;
+
+                                if let Some(state) =
+                                    get_state_msg(&main_state.active_game.game, win_status)
+                                {
+                                    send_msg = state;
+                                } else {
+                                    send_msg = "err:state_invalid".to_string()
+                                }
+                            } else {
+                                send_to_all = false;
+                                if let Some(state) = get_status_msg(main_state) {
+                                    send_msg = state + ";err:invalid_mov";
+                                } else {
+                                    send_msg = "err:state_invalid".to_string()
+                                }
+                            }
                         }
-                    } else {
-                        send_to_all = false;
-                        send_msg = "err:invalid_move".to_string()
                     }
                 }
                 _ => continue,
@@ -238,9 +255,7 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                 &main_state.active_game.active_threats,
                 true,
             );
-            let state = get_state(&main_state.active_game.game, win_status);
-            if state.is_some() {
-                let mut send_msg = state.unwrap();
+            if let Some(mut send_msg) = get_state_msg(&main_state.active_game.game, win_status) {
                 send_msg.push(';');
                 let mut buff = send_msg.into_bytes();
                 buff.resize(MSG_SIZE, 0);

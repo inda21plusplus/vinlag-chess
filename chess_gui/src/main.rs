@@ -152,7 +152,6 @@ macro_rules! add_sprite_sheet {
 
 fn get_loaded_game(board: String) -> Option<(Gameboard, ThreatMap)> {
     if let Some(board) = chess_engine::parser::init_game_board(board) {
-        println!("PARSED: ");
         let threats = get_threats(&board);
         return Some((board, threats));
     }
@@ -252,7 +251,7 @@ fn move_piece_with_state(
         let threats = get_threats(&state.active_game.game);
         let win_status = get_game_state(&mut state.active_game.game, &threats, true);
         state.active_game.active_threats = threats;
-        
+
         return win_status;
     } else {
         println!("Invalid move")
@@ -320,7 +319,8 @@ fn do_game_logic(main_state: &mut MainState) {
             {
                 let move_to = move_square.unwrap();
                 let move_from = state.selected_square.unwrap();
-                let win_status = move_piece_with_state(main_state, move_from, move_to, Piece::Queen);
+                let win_status =
+                    move_piece_with_state(main_state, move_from, move_to, Piece::Queen);
                 main_state.active_game.win_status = win_status;
 
                 // if server is active ping all clients with an update
