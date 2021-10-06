@@ -15,17 +15,20 @@ pub(crate) struct Client {
 }
 
 pub(crate) fn start_client() -> Option<Client> {
-    if let Ok(stream) = TcpStream::connect(LOCAL) {
+    if let Ok(mut stream) = TcpStream::connect(LOCAL) {
         stream
             .set_nonblocking(true)
             .expect("failed to initiate non-blocking");
-        //    let (tx, rx) = mpsc::channel::<(String, SocketAddr)>();
 
-        return Some(Client {
-            stream,
-            //  tx,
-            //  rx,
-        });
+        if stream.write_all(b"init:;").is_ok() {
+            //    let (tx, rx) = mpsc::channel::<(String, SocketAddr)>();
+
+            return Some(Client {
+                stream,
+                //  tx,
+                //  rx,
+            });
+        }
     } else {
         println!("Failed to connect to {}", LOCAL);
     }

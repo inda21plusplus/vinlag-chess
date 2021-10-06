@@ -69,20 +69,14 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
         while let Ok((mut socket, addr)) = server.listener.accept() {
             println!("Client {} connected", addr);
 
-            // only one client can send inputs
-            if server.move_client.is_none() {
-                server.move_client = Some(addr);
-                println!("Client {} is now owner", addr);
-            }
-
             let tx = server.tx.clone();
             server
                 .clients
                 .push(socket.try_clone().expect("failed to clone client"));
 
             // when a client joins, send them the board
-            tx.send(("get:board".to_string(), addr))
-                .expect("failed to send msg to rx");
+            // tx.send(("get:board".to_string(), addr))
+            //    .expect("failed to send msg to rx");
 
             thread::spawn(move || {
                 let read_buffer = BufReader::new(&mut socket);
@@ -97,6 +91,8 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                         }
                         Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
                         Err(_) => {
+                            tx.send(("disconnect:closed_connection".to_string(), addr))
+                                .expect("failed to send msg to rx");
                             println!("closing connection with: {}", addr);
                             break;
                         }
@@ -105,6 +101,8 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
             });
         }
     }
+
+    const INVALID_STATE_MSG: &str = "err:invalid_state";
 
     loop {
         let mut recv: Result<(String, SocketAddr), mpsc::TryRecvError> =
@@ -129,20 +127,50 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
             let input = &split[1];
             println!("[{}],[{}]", action, input);
             match &action[..] {
+                "disconnect" => {
+                    // disconnect:[REASON];
+                    if let Some(server) = &mut main_state.server {
+                        for index in 0..server.clients.len() {
+                            let client_addr = server.clients[index].peer_addr();
+                            if client_addr.is_ok() && client_addr.unwrap() == addr {
+                                server.clients.remove(index);
+                                break;
+                            }
+                        }
+                        if Some(addr) == server.move_client {
+                            server.move_client = None;
+                        }
+                    }
+                }
                 "request" => match &input[..] {
                     "rematch" => {
                         //rematch? not agreed upon yet
                     }
                     _ => (),
                 },
+                "init" => {
+                    send_to_all = false;
+                    if let Some(state) = get_status_msg(main_state) {
+                        send_msg = state;
+                    } else {
+                        send_msg = INVALID_STATE_MSG.to_string()
+                    }
+
+                    if let Some(server) = &mut main_state.server {
+                        // only one client can send inputs
+                        if server.move_client.is_none() {
+                            server.move_client = Some(addr);
+                            println!("Client {} is now owner", addr);
+                        }
+                    }
+                }
                 "get" => match &input[..] {
                     "board" => {
                         send_to_all = false;
-
                         if let Some(state) = get_status_msg(main_state) {
                             send_msg = state;
                         } else {
-                            send_msg = "err:state_invalid".to_string()
+                            send_msg = INVALID_STATE_MSG.to_string()
                         }
                     }
                     "spectatorcount" => {
@@ -173,7 +201,7 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
 
                                 send_msg = state + ";" + msg;
                             } else {
-                                send_msg = "err:state_invalid".to_string()
+                                send_msg = INVALID_STATE_MSG.to_string()
                             }
                         } else {
                             let (move_from, move_to) =
@@ -205,14 +233,14 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                                 {
                                     send_msg = state;
                                 } else {
-                                    send_msg = "err:state_invalid".to_string()
+                                    send_msg = INVALID_STATE_MSG.to_string()
                                 }
                             } else {
                                 send_to_all = false;
                                 if let Some(state) = get_status_msg(main_state) {
                                     send_msg = state + ";err:invalid_mov";
                                 } else {
-                                    send_msg = "err:state_invalid".to_string()
+                                    send_msg = INVALID_STATE_MSG.to_string()
                                 }
                             }
                         }
