@@ -7,7 +7,6 @@ use chess_engine::parser;
 use crate::{get_loaded_game, MainState};
 
 const LOCAL: &str = "127.0.0.1:1337";
-const MSG_SIZE: usize = 128;
 
 pub(crate) struct Client {
     stream: TcpStream,
@@ -75,9 +74,7 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
             });
             send_msg.push(';');
 
-            let mut buff = send_msg.into_bytes();
-            buff.resize(MSG_SIZE, 0);
-
+            let buff = send_msg.into_bytes();
             if let Some(client) = &mut main_state.client {
                 let write_error = client.stream.write_all(&buff);
                 if write_error.is_ok() {
@@ -87,7 +84,6 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
         }
 
         for msg in handle_msg {
-            println!("GET : {}", msg);
             let split: Vec<String> = msg.split(":").map(|s| s.to_string()).collect();
             if split.len() != 2 {
                 return;

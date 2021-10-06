@@ -98,9 +98,16 @@ pub fn get_square_from_screen(mouse: Vec2) -> Option<Position> {
         return None;
     }
 
+    let x = (zero_offset.x / BOARD_RENDER_TILE_SIZE) as usize;
+    let y = (zero_offset.y / BOARD_RENDER_TILE_SIZE) as usize;
+
+    if x >= BOARD_SIZE || y >= BOARD_SIZE {
+        return None;
+    }
+
     return Some(Position {
-        x: (zero_offset.x / BOARD_RENDER_TILE_SIZE) as usize,
-        y: (zero_offset.y / BOARD_RENDER_TILE_SIZE) as usize,
+        x,
+        y ,
     });
 }
 

@@ -10,7 +10,6 @@ use chess_engine::parser;
 use crate::{move_piece_with_state, MainState};
 
 const LOCAL: &str = "127.0.0.1:1337";
-const MSG_SIZE: usize = 128;
 
 pub(crate) struct Server {
     listener: TcpListener,
@@ -223,8 +222,7 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
             }
 
             send_msg.push(';');
-            let mut buff = send_msg.into_bytes();
-            buff.resize(MSG_SIZE, 0);
+            let buff = send_msg.into_bytes();
 
             if let Some(server) = &mut main_state.server {
                 if send_to_all {
@@ -257,8 +255,7 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
             );
             if let Some(mut send_msg) = get_state_msg(&main_state.active_game.game, win_status) {
                 send_msg.push(';');
-                let mut buff = send_msg.into_bytes();
-                buff.resize(MSG_SIZE, 0);
+                let buff = send_msg.into_bytes();
                 for client in &mut server.clients {
                     let _write_error = client.write_all(&buff);
                 }
