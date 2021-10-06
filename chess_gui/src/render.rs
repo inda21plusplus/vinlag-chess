@@ -105,10 +105,7 @@ pub fn get_square_from_screen(mouse: Vec2) -> Option<Position> {
         return None;
     }
 
-    return Some(Position {
-        x,
-        y ,
-    });
+    return Some(Position { x, y });
 }
 
 fn get_piece_image(
@@ -217,6 +214,44 @@ pub fn render_button(
             .offset(Vec2::new(0.5, 0.5)),
     )?;
     Ok(())
+}
+
+pub(crate) fn render_multiplayer_status(ctx: &mut Context, state: &MainState) {
+    let active_font = &state.render_config.fontsets[state.render_config.active_fontset_index];
+
+    if let Some(server) = &state.server {
+        let mut text_msg = if server.move_client.is_some() {
+            "Host\n".to_string()
+        } else {
+            "Väntar på spelare...\n".to_string()
+        };
+
+        text_msg.push_str(&"Åskådare: ".to_string());
+        text_msg.push_str(&server.spectator_count().to_string());
+
+        let mut text = graphics::Text::new(text_msg);
+        text.set_font(active_font.font, active_font.font_size);
+
+        let _text_error = graphics::draw(
+            ctx,
+            &text,
+            graphics::DrawParam::new()
+                .dest(Vec2::new(5.0, 0.0))
+        );
+    }
+
+    if let Some(client) = &state.client {
+        let text_msg = if client.is_player { "Spelare" } else { "Åskådare" };
+        let mut text = graphics::Text::new(text_msg);
+        text.set_font(active_font.font, active_font.font_size);
+
+        let _text_error = graphics::draw(
+            ctx,
+            &text,
+            graphics::DrawParam::new()
+                .dest(Vec2::new(5.0, 0.0))
+        );
+    }
 }
 
 pub(crate) fn render_message(ctx: &mut Context, state: &MainState) -> Result<Action, GameError> {

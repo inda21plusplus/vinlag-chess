@@ -10,7 +10,7 @@ const LOCAL: &str = "127.0.0.1:1337";
 
 pub(crate) struct Client {
     stream: TcpStream,
-    pub is_player: bool,
+    pub(crate) is_player: bool,
     // tx: Sender<String>,
     // rx: Receiver<String>,
 }

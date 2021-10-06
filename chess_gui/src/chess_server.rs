@@ -13,10 +13,17 @@ const LOCAL: &str = "127.0.0.1:1337";
 
 pub(crate) struct Server {
     listener: TcpListener,
-    clients: Vec<TcpStream>,
-    move_client: Option<SocketAddr>,
+    pub(crate) clients: Vec<TcpStream>,
+    pub(crate) move_client: Option<SocketAddr>,
     tx: Sender<(String, SocketAddr)>,
     rx: Receiver<(String, SocketAddr)>,
+}
+
+impl Server {
+    pub(crate) fn spectator_count(&self) -> usize {
+        return self.clients.len()
+        - if self.move_client.is_some() { 1 } else { 0 }
+    }
 }
 
 pub(crate) fn start_server() -> Server {
@@ -85,19 +92,22 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                     match read {
                         Ok(msg) => {
                             let msg = String::from_utf8(msg).expect("Invalid utf8 message");
-
                             println!("{}: {:?}", addr, msg);
+                            if msg.starts_with("disconnect") {
+                                tx.send((msg, addr)).expect("failed to send msg to rx");
+                                return;
+                            }
                             tx.send((msg, addr)).expect("failed to send msg to rx");
                         }
                         Err(ref err) if err.kind() == ErrorKind::WouldBlock => (),
                         Err(_) => {
-                            tx.send(("disconnect:closed_connection".to_string(), addr))
-                                .expect("failed to send msg to rx");
                             println!("closing connection with: {}", addr);
                             break;
                         }
                     }
                 }
+                tx.send(("disconnect:closed_connection".to_string(), addr))
+                    .expect("failed to send msg to rx");
             });
         }
     }
@@ -128,6 +138,8 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
             println!("[{}],[{}]", action, input);
             match &action[..] {
                 "disconnect" => {
+                    send_to_all = false;
+                    println!("Client {} disconnected due to {}", addr, input);
                     // disconnect:[REASON];
                     if let Some(server) = &mut main_state.server {
                         for index in 0..server.clients.len() {
@@ -194,7 +206,10 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                         send_to_all = false;
                         let mut result = "spectatorcount:".to_string();
                         if let Some(server) = &mut main_state.server {
-                            result.push_str(&(server.clients.len() - 1).to_string());
+                            result.push_str(
+                                &(server.spectator_count())
+                                .to_string(),
+                            );
                         }
                         send_msg = result;
                     }

@@ -410,6 +410,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
         render_clear(ctx);
         render_board(ctx)?;
         render_numbers(ctx, &self.render_config)?;
+        render_multiplayer_status(ctx,&self);
         render_highlight(ctx, self.active_game.selected_square, HIGHLIGHT_COLOR)?;
         if self.active_game.possible_moves.is_some() {
             for pos in self.active_game.possible_moves.as_ref().unwrap() {
