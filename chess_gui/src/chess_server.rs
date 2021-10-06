@@ -149,6 +149,13 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                     _ => (),
                 },
                 "init" => {
+                    let request_player = match input.chars().nth(0) {
+                        Some('s') => false,
+                        Some('p') => true,
+                        None => true,
+                        _ => false,
+                    };
+
                     send_to_all = false;
                     if let Some(state) = get_status_msg(main_state) {
                         send_msg = state;
@@ -156,12 +163,22 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                         send_msg = INVALID_STATE_MSG.to_string()
                     }
 
-                    if let Some(server) = &mut main_state.server {
-                        // only one client can send inputs
-                        if server.move_client.is_none() {
-                            server.move_client = Some(addr);
-                            println!("Client {} is now owner", addr);
+                    let mut is_player = false;
+                    if request_player {
+                        if let Some(server) = &mut main_state.server {
+                            // only one client can send inputs
+                            if server.move_client.is_none() {
+                                server.move_client = Some(addr);
+                                println!("Client {} is now player", addr);
+                                is_player = true;
+                            }
                         }
+                    }
+
+                    if is_player {
+                        send_msg.push_str(";playertype:p")
+                    } else {
+                        send_msg.push_str(";playertype:s")
                     }
                 }
                 "get" => match &input[..] {

@@ -10,6 +10,7 @@ const LOCAL: &str = "127.0.0.1:1337";
 
 pub(crate) struct Client {
     stream: TcpStream,
+    pub is_player: bool,
     // tx: Sender<String>,
     // rx: Receiver<String>,
 }
@@ -25,6 +26,7 @@ pub(crate) fn start_client() -> Option<Client> {
 
             return Some(Client {
                 stream,
+                is_player: true,
                 //  tx,
                 //  rx,
             });
@@ -96,6 +98,16 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
             let input = &split[1];
 
             match &action[..] {
+                "playertype" => {
+                    if let Some(client) = &mut main_state.client {
+                        match input.chars().nth(0) {
+                            Some('p') => client.is_player = true,
+                            Some('s') => client.is_player = false,
+                            None => (),
+                            _ => (),
+                        }
+                    }
+                }
                 "board" => {
                     if let Some((game, threats)) = get_loaded_game(input.to_string()) {
                         main_state.active_game.win_status = WinStatus::Nothing;

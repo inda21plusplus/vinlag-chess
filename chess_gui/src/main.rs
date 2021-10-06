@@ -273,20 +273,21 @@ fn do_game_logic(main_state: &mut MainState) {
         let mouse_pos = Vec2::new(input.pos_x, input.pos_y);
         state.hover_position = Some(mouse_pos);
         if input.mouse_clicked {
-
             if let Some(selected_square) = get_square_from_screen(mouse_pos) {
-                let piece_data =
-                    state.game.game.board[selected_square.x][selected_square.y];
+                let piece_data = state.game.game.board[selected_square.x][selected_square.y];
                 let is_white_to_move = state.game.game.is_white_to_move;
 
                 // cant touch a piece if it is none or if the user does not have controll over it (server and client)
                 // server is always white and cant move black pieces, reverse for client
+                // client can also only move pices when it is a player
                 if piece_data.is_white == is_white_to_move
                     && piece_data.piece != Piece::None
                     && (main_state.server.is_none()
                         || (main_state.server.is_some() && is_white_to_move))
                     && (main_state.client.is_none()
-                        || (main_state.client.is_some() && !is_white_to_move))
+                        || (main_state.client.is_some()
+                            && !is_white_to_move
+                            && main_state.client.as_ref().unwrap().is_player))
                 {
                     state.selected_square = Some(selected_square);
                     state.possible_moves = Some(get_all_valid_moves(
