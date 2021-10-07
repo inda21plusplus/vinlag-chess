@@ -6,17 +6,29 @@ use chess_engine::parser;
 
 use crate::{get_loaded_game, MainState};
 
-const LOCAL: &str = "127.0.0.1:1337";
-
 pub(crate) struct Client {
     stream: TcpStream,
     pub(crate) is_player: bool,
+    pub(crate) ip : String,
     // tx: Sender<String>,
     // rx: Receiver<String>,
 }
 
-pub(crate) fn start_client() -> Option<Client> {
-    if let Ok(mut stream) = TcpStream::connect(LOCAL) {
+impl Client {
+    pub(crate) fn shutdown(&self) -> bool {
+        return self.stream.shutdown(std::net::Shutdown::Both).is_ok();
+    }
+}
+
+pub(crate) fn start_client(mut ip: String) -> Option<Client> {
+    // ip cant be less than 8 chars, it is not valid
+    if ip.len() < 8 {
+        return None;
+    };
+
+    ip.push_str(":1337");
+
+    if let Ok(mut stream) = TcpStream::connect(ip.clone()) {
         stream
             .set_nonblocking(true)
             .expect("failed to initiate non-blocking");
@@ -27,12 +39,13 @@ pub(crate) fn start_client() -> Option<Client> {
             return Some(Client {
                 stream,
                 is_player: true,
+                ip
                 //  tx,
                 //  rx,
             });
         }
     } else {
-        println!("Failed to connect to {}", LOCAL);
+        println!("Failed to connect to {}", ip);
     }
 
     return None;

@@ -191,7 +191,13 @@ fn render_round_rect(ctx: &mut Context, pos: Vec2, size: Vec2, color: Color) -> 
         BUTTON_RADIUS,
         color,
     )?;
-    graphics::draw(ctx, &square, (pos,))?;
+    graphics::draw(
+        ctx,
+        &square,
+        graphics::DrawParam::new()
+            .dest(pos)
+            .offset(Vec2::new(0.5, 0.5)),
+    )?;
 
     Ok(())
 }
@@ -228,84 +234,93 @@ pub(crate) fn render_multiplayer_status(ctx: &mut Context, state: &MainState) {
 
         text_msg.push_str(&"Åskådare: ".to_string());
         text_msg.push_str(&server.spectator_count().to_string());
+        text_msg.push_str("\nIP: ");
+        text_msg.push_str(&server.ip);
 
         let mut text = graphics::Text::new(text_msg);
-        text.set_font(active_font.font, active_font.font_size);
+        text.set_font(active_font.font, graphics::PxScale { x: 17.0, y: 17.0 });
 
         let _text_error = graphics::draw(
             ctx,
             &text,
-            graphics::DrawParam::new()
-                .dest(Vec2::new(5.0, 0.0))
+            graphics::DrawParam::new().dest(Vec2::new(5.0, 0.0)),
         );
     }
 
     if let Some(client) = &state.client {
-        let text_msg = if client.is_player { "Spelare" } else { "Åskådare" };
+        let mut text_msg = (if client.is_player {
+            "Spelare\nIP: "
+        } else {
+            "Åskådare\nIP: "
+        }).to_string();
+        text_msg.push_str(&client.ip);
+
         let mut text = graphics::Text::new(text_msg);
-        text.set_font(active_font.font, active_font.font_size);
+        text.set_font(active_font.font, graphics::PxScale { x: 20.0, y: 20.0 });
 
         let _text_error = graphics::draw(
             ctx,
             &text,
-            graphics::DrawParam::new()
-                .dest(Vec2::new(5.0, 0.0))
+            graphics::DrawParam::new().dest(Vec2::new(5.0, 0.0)),
         );
     }
 }
 
 pub(crate) fn render_message(ctx: &mut Context, state: &MainState) -> Result<Action, GameError> {
-    let msg = match &state.active_message {
-        Some(m) => m,
-        None => return Ok(Action::None),
-    };
+    if let Some(msg) = &state.active_message {
+        let size = Vec2::new(300.0, 150.0);
+        let pos = Vec2::new(SCREEN_SIZE.0 / 2.0, SCREEN_SIZE.1 / 2.0);
+        let _err = render_round_rect(ctx, pos - size / 2.0, size, BUTTON_COLOR);
+        let mut current_text = msg.text.clone();
+        if msg.confirm_value == Action::StartClient {
+            current_text.push_str(&state.input_staus.ip_input);
+        }
+        let mut text = graphics::Text::new(current_text);
+        let active_font = &state.render_config.fontsets[state.render_config.active_fontset_index];
 
-    let size = Vec2::new(300.0, 150.0);
-    let pos = Vec2::new(SCREEN_SIZE.0 / 2.0, SCREEN_SIZE.1 / 2.0);
-    let _err = render_round_rect(ctx, pos - size / 2.0, size, BUTTON_COLOR);
-    let mut text = graphics::Text::new(msg.text.clone());
-    let active_font = &state.render_config.fontsets[state.render_config.active_fontset_index];
+        text.set_font(active_font.font, active_font.font_size);
 
-    text.set_font(active_font.font, active_font.font_size);
+        let _err2 = graphics::draw(
+            ctx,
+            &text,
+            graphics::DrawParam::new()
+                .dest(pos + Vec2::new(0.0, -55.0))
+                .offset(Vec2::new(0.5, 0.0)),
+        );
 
-    let _err2 = graphics::draw(
-        ctx,
-        &text,
-        graphics::DrawParam::new()
-            .dest(pos + Vec2::new(0.0, -50.0))
-            .offset(Vec2::new(0.5, 0.0)),
-    );
+        let confirm_size = Vec2::new(60.0, 60.0);
+        let confirm_pos = Vec2::new(pos.x - confirm_size.x * 1.5, pos.y);
+        let cancel_pos = Vec2::new(pos.x + confirm_size.x / 2.0, pos.y);
 
-    let confirm_size = Vec2::new(60.0, 60.0);
-    let confirm_pos = Vec2::new(pos.x - confirm_size.x * 1.5, pos.y);
-    let cancel_pos = Vec2::new(pos.x + confirm_size.x / 2.0, pos.y);
+        let mouse_x = state.input_staus.pos_x;
+        let mouse_y = state.input_staus.pos_y;
 
-    let mouse_x = state.input_staus.pos_x;
-    let mouse_y = state.input_staus.pos_y;
+        let is_hovering_confirm = is_inside_square(mouse_x, mouse_y, confirm_pos, confirm_size);
+        let is_hovering_cancel = is_inside_square(mouse_x, mouse_y, cancel_pos, confirm_size);
 
-    let is_hovering_confirm = is_inside_square(mouse_x, mouse_y, confirm_pos, confirm_size);
-    let is_hovering_cancel = is_inside_square(mouse_x, mouse_y, cancel_pos, confirm_size);
+        let mut confirm_color = CONFIRM_COLOR;
+        let mut cancel_color = ERROR_COLOR;
 
-    let mut confirm_color = CONFIRM_COLOR;
-    let mut cancel_color = ERROR_COLOR;
+        if is_hovering_confirm {
+            confirm_color.a = 0.6;
+        }
+        if is_hovering_cancel {
+            cancel_color.a = 0.6;
+        }
 
-    if is_hovering_confirm {
-        confirm_color.a = 0.6;
+        render_button(ctx, confirm_pos, confirm_size, &msg.confirm, confirm_color)?;
+        render_button(ctx, cancel_pos, confirm_size, &msg.cancel, cancel_color)?;
+
+        if is_hovering_confirm {
+            return Ok(msg.confirm_value);
+        } else if is_hovering_cancel {
+            return Ok(msg.cancel_value);
+        }
+
+        Ok(Action::None)
+    } else {
+        Ok(Action::None)
     }
-    if is_hovering_cancel {
-        cancel_color.a = 0.6;
-    }
-
-    render_button(ctx, confirm_pos, confirm_size, &msg.confirm, confirm_color)?;
-    render_button(ctx, cancel_pos, confirm_size, &msg.cancel, cancel_color)?;
-
-    if is_hovering_confirm {
-        return Ok(msg.confirm_value);
-    } else if is_hovering_cancel {
-        return Ok(msg.cancel_value);
-    }
-
-    Ok(Action::None)
 }
 
 fn is_inside_square(mouse_x: f32, mouse_y: f32, pos: Vec2, size: Vec2) -> bool {
@@ -316,21 +331,29 @@ fn is_inside_square(mouse_x: f32, mouse_y: f32, pos: Vec2, size: Vec2) -> bool {
 }
 
 pub(crate) fn render_buttons(ctx: &mut Context, state: &MainState) -> Option<usize> {
-    let icons: Vec<&graphics::Image> = vec![
+    let mut icons: Vec<&graphics::Image> = vec![
         &state.render_config.icons.exit,
         // &state.render_config.icons.surrender,
         &state.render_config.icons.replay,
         &state.render_config.icons.settings,
     ];
 
-    let start = SCREEN_SIZE.0 / 2.0 - 200.0;
+    if state.client.is_some() || state.server.is_some() {
+        icons.push(&state.render_config.icons.leave);
+    } else {
+        icons.push(&state.render_config.icons.host);
+        icons.push(&state.render_config.icons.join);
+    }
+    const BUTTON_WIDTH: f32 = 120f32;
+
+    let start = (SCREEN_SIZE.0 - BUTTON_WIDTH * icons.len() as f32) / 2.0;
 
     let mouse_x = state.input_staus.pos_x;
     let mouse_y = state.input_staus.pos_y;
     let mut hover_button = None;
 
-    for x in 0..3 {
-        let pos = Vec2::new(start + 150.0 * (x as f32), 5.0);
+    for x in 0..icons.len() {
+        let pos = Vec2::new(start + BUTTON_WIDTH * (x as f32), 5.0);
         let size = Vec2::new(100.0, 50.0);
         let is_hovering = is_inside_square(mouse_x, mouse_y, pos, size);
         if is_hovering {

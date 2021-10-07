@@ -62,12 +62,16 @@ struct Icons {
     //arrow_back: graphics::Image,
     exit: graphics::Image,
     confirm: graphics::Image,
+    host: graphics::Image,
+    join: graphics::Image,
+    leave: graphics::Image,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Action {
     StartServer,
     StartClient,
+    Disconnect,
     Restart,
     Quit,
     None,
@@ -94,6 +98,7 @@ struct RenderConfig {
 }
 
 struct InputStatus {
+    ip_input: String,
     pos_x: f32,
     pos_y: f32,
     mouse_down: bool,
@@ -186,17 +191,14 @@ impl MainState {
             //arrow_back: addpng!(ctx, "arrow_back"),
             exit: add_png!(ctx, "exit"),
             confirm: add_png!(ctx, "confirm"),
+            leave: add_png!(ctx, "leave"),
+            join: add_png!(ctx, "join"),
+            host: add_png!(ctx, "host"),
         };
 
         let (game, threats) = get_loaded_game(STANDARD_BOARD.to_string()).unwrap();
 
-        let message = Some(PendingAction {
-            text: "Start server?".to_string(),
-            confirm: icons.confirm.clone(),
-            cancel: icons.exit.clone(),
-            confirm_value: Action::StartServer,
-            cancel_value: Action::StartClient,
-        });
+        let message = None;
 
         let s = MainState {
             server: None,
@@ -225,6 +227,7 @@ impl MainState {
                 mouse_down: false,
                 mouse_clicked: false,
                 mouse_released: false,
+                ip_input: String::new(),
             },
             active_message: message,
         };
@@ -344,10 +347,10 @@ fn do_game_logic(main_state: &mut MainState) {
 fn handle_action(action: Action, state: &mut MainState) {
     match action {
         Action::StartClient => {
-            state.client = chess_client::start_client();
+            state.client = chess_client::start_client(state.input_staus.ip_input.clone());
         }
         Action::StartServer => {
-            state.server = Some(chess_server::start_server());
+            state.server = chess_server::start_server();
         }
         Action::Restart => {
             // a client cant restart, TODO reqest:rematch;
@@ -365,6 +368,17 @@ fn handle_action(action: Action, state: &mut MainState) {
         }
         Action::Quit => exit(0),
         Action::None => {}
+        Action::Disconnect => {
+            if let Some(server) = &mut state.server {
+                server.shutdown();
+                state.server = None;
+            }
+
+            if let Some(client) = &mut state.client {
+                client.shutdown();
+                state.client = None;
+            }
+        }
     }
 }
 
@@ -410,7 +424,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
         render_clear(ctx);
         render_board(ctx)?;
         render_numbers(ctx, &self.render_config)?;
-        render_multiplayer_status(ctx,&self);
+        render_multiplayer_status(ctx, &self);
         render_highlight(ctx, self.active_game.selected_square, HIGHLIGHT_COLOR)?;
         if self.active_game.possible_moves.is_some() {
             for pos in self.active_game.possible_moves.as_ref().unwrap() {
@@ -424,6 +438,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
             // handle main input buttons
             if selected_button.is_some() && self.input_staus.mouse_released {
+                let is_connected = self.server.is_some() || self.client.is_some();
+
                 match selected_button.unwrap() {
                     0 => {
                         self.active_message = Some(PendingAction {
@@ -451,6 +467,34 @@ impl event::EventHandler<ggez::GameError> for MainState {
                             self.render_config.active_sprites_index = 0
                         }
                     }
+                    3 => {
+                        if is_connected {
+                            self.active_message = Some(PendingAction {
+                                text: "Avbryt anslutng?".to_string(),
+                                confirm: self.render_config.icons.confirm.clone(),
+                                cancel: self.render_config.icons.exit.clone(),
+                                confirm_value: Action::Disconnect,
+                                cancel_value: Action::None,
+                            })
+                        } else {
+                            self.active_message = Some(PendingAction {
+                                text: "Starta en server?".to_string(),
+                                confirm: self.render_config.icons.confirm.clone(),
+                                cancel: self.render_config.icons.exit.clone(),
+                                confirm_value: Action::StartServer,
+                                cancel_value: Action::None,
+                            })
+                        }
+                    }
+                    4 => {
+                        self.active_message = Some(PendingAction {
+                            text: "Anslut till en server\nIP: ".to_string(),
+                            confirm: self.render_config.icons.confirm.clone(),
+                            cancel: self.render_config.icons.exit.clone(),
+                            confirm_value: Action::StartClient,
+                            cancel_value: Action::None,
+                        })
+                    }
                     _ => {}
                 }
             }
@@ -472,6 +516,42 @@ impl event::EventHandler<ggez::GameError> for MainState {
         self.frame += 1;
         graphics::present(ctx)?;
         Ok(())
+    }
+
+    fn key_down_event(
+        &mut self,
+        ctx: &mut Context,
+        keycode: event::KeyCode,
+        _keymods: event::KeyMods,
+        _repeat: bool,
+    ) {
+        if self.active_message.is_some()
+            && self.active_message.as_ref().unwrap().confirm_value == Action::StartClient
+        {
+            // ip can be max 15 chars long
+            if self.input_staus.ip_input.len() < 15 {
+                self.input_staus.ip_input.push_str(match keycode {
+                    event::KeyCode::Key1 => "1",
+                    event::KeyCode::Key2 => "2",
+                    event::KeyCode::Key3 => "3",
+                    event::KeyCode::Key4 => "4",
+                    event::KeyCode::Key5 => "5",
+                    event::KeyCode::Key6 => "6",
+                    event::KeyCode::Key7 => "7",
+                    event::KeyCode::Key8 => "8",
+                    event::KeyCode::Key9 => "9",
+                    event::KeyCode::Key0 => "0",
+                    event::KeyCode::Period => ".",
+                    _ => "",
+                });
+            }
+
+            if (keycode == event::KeyCode::Delete || keycode == event::KeyCode::Back)
+                && self.input_staus.ip_input.len() > 0
+            {
+                self.input_staus.ip_input.pop();
+            }
+        }
     }
 
     fn mouse_button_down_event(

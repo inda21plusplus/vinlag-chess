@@ -9,3 +9,4 @@ edition = "2018"
 chess_engine = { path = "../chess_engine" }
 ggez = "0.6.1" #GUI
 glam = { version = "0.17.3", features = ["mint"]} #MATH
+local-ip-address = "0.4.4"

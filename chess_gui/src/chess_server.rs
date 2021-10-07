@@ -9,9 +9,10 @@ use chess_engine::parser;
 
 use crate::{move_piece_with_state, MainState};
 
-const LOCAL: &str = "127.0.0.1:1337";
+const IP_PORT: u16 = 1337;
 
 pub(crate) struct Server {
+    pub(crate) ip: String,
     listener: TcpListener,
     pub(crate) clients: Vec<TcpStream>,
     pub(crate) move_client: Option<SocketAddr>,
@@ -21,27 +22,49 @@ pub(crate) struct Server {
 
 impl Server {
     pub(crate) fn spectator_count(&self) -> usize {
-        return self.clients.len()
-        - if self.move_client.is_some() { 1 } else { 0 }
+        return self.clients.len() - if self.move_client.is_some() { 1 } else { 0 };
+    }
+
+    pub(crate) fn shutdown(&self) -> bool {
+        let mut is_successful = true;
+        for client in &self.clients {
+           if client.shutdown(std::net::Shutdown::Both).is_err() {
+               is_successful = false;
+           }
+        }
+
+        is_successful
     }
 }
 
-pub(crate) fn start_server() -> Server {
-    let listener = TcpListener::bind(LOCAL).expect("Listener failed to bind");
-    listener
-        .set_nonblocking(true)
-        .expect("failed to initialize non-blocking");
+pub(crate) fn start_server() -> Option<Server> {
+    if let Ok(my_local_ip) = local_ip_address::local_ip() {
+        let mut full_ip = my_local_ip.to_string();
+        full_ip.push(':');
+        full_ip.push_str(&IP_PORT.to_string());
+        if let Ok(listener) = TcpListener::bind(&full_ip) {
+            listener
+                .set_nonblocking(true)
+                .expect("failed to initialize non-blocking");
 
-    let clients = vec![];
-    let (tx, rx) = mpsc::channel::<(String, SocketAddr)>();
+            let clients = vec![];
+            let (tx, rx) = mpsc::channel::<(String, SocketAddr)>();
 
-    return Server {
-        listener,
-        clients,
-        tx,
-        rx,
-        move_client: None,
-    };
+            return Some(Server {
+                ip: full_ip,
+                listener,
+                clients,
+                tx,
+                rx,
+                move_client: None,
+            });
+        } else {
+            println!("Error binding listener for ip {}",full_ip);
+        }
+    } else {
+        println!("Error getting IP");
+    }
+    None
 }
 
 fn get_state_msg(gameboard: &Gameboard, win_status: WinStatus) -> Option<String> {
@@ -206,10 +229,7 @@ pub(crate) fn server_loop(main_state: &mut MainState) -> Result<(), String> {
                         send_to_all = false;
                         let mut result = "spectatorcount:".to_string();
                         if let Some(server) = &mut main_state.server {
-                            result.push_str(
-                                &(server.spectator_count())
-                                .to_string(),
-                            );
+                            result.push_str(&(server.spectator_count()).to_string());
                         }
                         send_msg = result;
                     }
