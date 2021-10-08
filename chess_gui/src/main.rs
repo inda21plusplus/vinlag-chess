@@ -165,6 +165,7 @@ fn get_loaded_game(board: String) -> Option<(Gameboard, ThreatMap)> {
 
 impl MainState {
     fn new(ctx: &mut Context) -> GameResult<MainState> {
+        println!("Game Init...");
         // init sprites and fonts
 
         let regular_sprites = add_sprite_sheet!(ctx, "regular");
@@ -231,6 +232,7 @@ impl MainState {
             },
             active_message: message,
         };
+        println!("Game Init Done");
         Ok(s)
     }
 }
@@ -262,12 +264,7 @@ fn move_piece_with_state(
     return WinStatus::Nothing;
 }
 
-/** Handle user input logic to move pieces and networking */
-fn do_game_logic(main_state: &mut MainState) {
-    // handle server and client multiplayer
-    let _server_result = chess_server::server_loop(main_state);
-    let _client_result = chess_client::client_loop(main_state);
-
+fn do_input_logic(main_state: &mut MainState) {
     let input = &main_state.input_staus;
     let state = &mut main_state.active_game;
 
@@ -382,45 +379,119 @@ fn handle_action(action: Action, state: &mut MainState) {
     }
 }
 
-impl event::EventHandler<ggez::GameError> for MainState {
-    fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        Ok(())
+fn update_win_status(main_state: &mut MainState) {
+    if main_state.active_message.is_none() {
+        if main_state.active_game.win_status != WinStatus::Nothing {
+            // updates the popup message asking to play again
+            let text = match main_state.active_game.win_status {
+                WinStatus::Tie => "Oavgjort, Spela igen?".to_string(),
+                WinStatus::WhiteWon => "Vit vann, Spela igen?".to_string(),
+                WinStatus::BlackWon => "Svart vann, Spela igen?".to_string(),
+                WinStatus::Nothing => "".to_string(),
+            };
+
+            main_state.input_staus.mouse_released = false;
+            main_state.active_message = Some(PendingAction {
+                text,
+                confirm: main_state.render_config.icons.confirm.clone(),
+                cancel: main_state.render_config.icons.exit.clone(),
+                confirm_value: Action::Restart,
+                cancel_value: Action::None,
+            })
+        }
+    } else {
+        // will remove message if it is a promt to restart if the game has been reset by host
+        // also will ensure that you cant pop up a menu to restart mid game as client
+        if main_state.client.is_some()
+            && main_state.active_game.win_status == WinStatus::Nothing
+            && main_state.active_message.as_ref().unwrap().confirm_value == Action::Restart
+        {
+            main_state.active_message = None;
+        }
     }
+}
 
-    fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        do_game_logic(self);
+fn render_header_buttons(ctx: &mut Context, main_state: &mut MainState) {
+    let selected_button = render_buttons(ctx, main_state);
 
-        if self.active_message.is_none() {
-            if self.active_game.win_status != WinStatus::Nothing {
-                // updates the popup message asking to play again
-                let text = match self.active_game.win_status {
-                    WinStatus::Tie => "Oavgjort, Spela igen?".to_string(),
-                    WinStatus::WhiteWon => "Vit vann, Spela igen?".to_string(),
-                    WinStatus::BlackWon => "Svart vann, Spela igen?".to_string(),
-                    WinStatus::Nothing => "".to_string(),
-                };
+    // handle main input buttons
+    if selected_button.is_some() && main_state.input_staus.mouse_released {
+        let is_connected = main_state.server.is_some() || main_state.client.is_some();
 
-                self.input_staus.mouse_released = false;
-                self.active_message = Some(PendingAction {
-                    text,
-                    confirm: self.render_config.icons.confirm.clone(),
-                    cancel: self.render_config.icons.exit.clone(),
+        match selected_button.unwrap() {
+            0 => {
+                main_state.active_message = Some(PendingAction {
+                    text: "Sluta spela?".to_string(),
+                    confirm: main_state.render_config.icons.confirm.clone(),
+                    cancel: main_state.render_config.icons.exit.clone(),
+                    confirm_value: Action::Quit,
+                    cancel_value: Action::None,
+                })
+            }
+            1 => {
+                main_state.active_message = Some(PendingAction {
+                    text: "Spela igen?".to_string(),
+                    confirm: main_state.render_config.icons.confirm.clone(),
+                    cancel: main_state.render_config.icons.exit.clone(),
                     confirm_value: Action::Restart,
                     cancel_value: Action::None,
                 })
             }
-        } else {
-            // will remove message if it is a promt to restart if the game has been reset by host
-            // also will ensure that you cant pop up a menu to restart mid game as client
-            if self.client.is_some()
-                && self.active_game.win_status == WinStatus::Nothing
-                && self.active_message.as_ref().unwrap().confirm_value == Action::Restart
-            {
-                self.active_message = None;
+            2 => {
+                // this simply changes the chess pieces images
+                main_state.render_config.active_sprites_index += 1;
+                if main_state.render_config.active_sprites_index
+                    >= main_state.render_config.spritesets.len()
+                {
+                    main_state.render_config.active_sprites_index = 0
+                }
             }
+            3 => {
+                if is_connected {
+                    main_state.active_message = Some(PendingAction {
+                        text: "Avbryt anslutng?".to_string(),
+                        confirm: main_state.render_config.icons.confirm.clone(),
+                        cancel: main_state.render_config.icons.exit.clone(),
+                        confirm_value: Action::Disconnect,
+                        cancel_value: Action::None,
+                    })
+                } else {
+                    main_state.active_message = Some(PendingAction {
+                        text: "Starta en server?".to_string(),
+                        confirm: main_state.render_config.icons.confirm.clone(),
+                        cancel: main_state.render_config.icons.exit.clone(),
+                        confirm_value: Action::StartServer,
+                        cancel_value: Action::None,
+                    })
+                }
+            }
+            4 => {
+                main_state.active_message = Some(PendingAction {
+                    text: "Anslut till en server\nIP: ".to_string(),
+                    confirm: main_state.render_config.icons.confirm.clone(),
+                    cancel: main_state.render_config.icons.exit.clone(),
+                    confirm_value: Action::StartClient,
+                    cancel_value: Action::None,
+                })
+            }
+            _ => {}
         }
+    }
+}
 
-        // render board
+impl event::EventHandler<ggez::GameError> for MainState {
+    fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        //println!("Logic frame {}", self.frame);
+        let _server_result = chess_server::server_loop(self);
+        chess_client::client_loop(self);
+        do_input_logic(self);
+        update_win_status(self);
+        Ok(())
+    }
+
+    fn draw(&mut self, ctx: &mut Context) -> GameResult {
+        //println!("Drawing frame {}", self.frame);
+
         render_clear(ctx);
         render_board(ctx)?;
         render_numbers(ctx, &self.render_config)?;
@@ -433,71 +504,9 @@ impl event::EventHandler<ggez::GameError> for MainState {
         }
 
         render_pieces(ctx, &self.render_config, &mut self.active_game)?;
+
         if self.active_message.is_none() {
-            let selected_button = render_buttons(ctx, self);
-
-            // handle main input buttons
-            if selected_button.is_some() && self.input_staus.mouse_released {
-                let is_connected = self.server.is_some() || self.client.is_some();
-
-                match selected_button.unwrap() {
-                    0 => {
-                        self.active_message = Some(PendingAction {
-                            text: "Sluta spela?".to_string(),
-                            confirm: self.render_config.icons.confirm.clone(),
-                            cancel: self.render_config.icons.exit.clone(),
-                            confirm_value: Action::Quit,
-                            cancel_value: Action::None,
-                        })
-                    }
-                    1 => {
-                        self.active_message = Some(PendingAction {
-                            text: "Spela igen?".to_string(),
-                            confirm: self.render_config.icons.confirm.clone(),
-                            cancel: self.render_config.icons.exit.clone(),
-                            confirm_value: Action::Restart,
-                            cancel_value: Action::None,
-                        })
-                    }
-                    2 => {
-                        self.render_config.active_sprites_index += 1;
-                        if self.render_config.active_sprites_index
-                            >= self.render_config.spritesets.len()
-                        {
-                            self.render_config.active_sprites_index = 0
-                        }
-                    }
-                    3 => {
-                        if is_connected {
-                            self.active_message = Some(PendingAction {
-                                text: "Avbryt anslutng?".to_string(),
-                                confirm: self.render_config.icons.confirm.clone(),
-                                cancel: self.render_config.icons.exit.clone(),
-                                confirm_value: Action::Disconnect,
-                                cancel_value: Action::None,
-                            })
-                        } else {
-                            self.active_message = Some(PendingAction {
-                                text: "Starta en server?".to_string(),
-                                confirm: self.render_config.icons.confirm.clone(),
-                                cancel: self.render_config.icons.exit.clone(),
-                                confirm_value: Action::StartServer,
-                                cancel_value: Action::None,
-                            })
-                        }
-                    }
-                    4 => {
-                        self.active_message = Some(PendingAction {
-                            text: "Anslut till en server\nIP: ".to_string(),
-                            confirm: self.render_config.icons.confirm.clone(),
-                            cancel: self.render_config.icons.exit.clone(),
-                            confirm_value: Action::StartClient,
-                            cancel_value: Action::None,
-                        })
-                    }
-                    _ => {}
-                }
-            }
+            render_header_buttons(ctx, self);
         } else {
             // waiting for the user to release click on a message button
             // be aware that clicking anywhere on the screen counts as Action::None
@@ -520,7 +529,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
     fn key_down_event(
         &mut self,
-        ctx: &mut Context,
+        _ctx: &mut Context,
         keycode: event::KeyCode,
         _keymods: event::KeyMods,
         _repeat: bool,
@@ -625,6 +634,6 @@ pub fn main() -> GameResult {
             .add_resource_path(resource_dir);
     let (mut ctx, event_loop) = cb.build()?;
     let state = MainState::new(&mut ctx)?;
+    println!("Starting game...");
     event::run(ctx, event_loop, state);
-    /**/
 }

@@ -9,9 +9,7 @@ use crate::{get_loaded_game, MainState};
 pub(crate) struct Client {
     stream: TcpStream,
     pub(crate) is_player: bool,
-    pub(crate) ip : String,
-    // tx: Sender<String>,
-    // rx: Receiver<String>,
+    pub(crate) ip: String,
 }
 
 impl Client {
@@ -21,12 +19,15 @@ impl Client {
 }
 
 pub(crate) fn start_client(mut ip: String) -> Option<Client> {
-    // ip cant be less than 8 chars, it is not valid
+    // ip cant be less than 8 chars
     if ip.len() < 8 {
         return None;
     };
 
-    ip.push_str(":1337");
+    // standard is the 1337 port
+    if !ip.contains(':') {
+        ip.push_str(":1337");
+    }
 
     if let Ok(mut stream) = TcpStream::connect(ip.clone()) {
         stream
@@ -34,14 +35,10 @@ pub(crate) fn start_client(mut ip: String) -> Option<Client> {
             .expect("failed to initiate non-blocking");
 
         if stream.write_all(b"init:;").is_ok() {
-            //    let (tx, rx) = mpsc::channel::<(String, SocketAddr)>();
-
             return Some(Client {
                 stream,
                 is_player: true,
-                ip
-                //  tx,
-                //  rx,
+                ip,
             });
         }
     } else {
@@ -51,7 +48,81 @@ pub(crate) fn start_client(mut ip: String) -> Option<Client> {
     return None;
 }
 
-pub(crate) fn client_loop(main_state: &mut MainState) {
+fn send_pending_move(main_state: &mut MainState) {
+    if let Some((pending_move_from, pending_move_to, promotion)) =
+        main_state.active_game.pending_move
+    {
+        let mut send_msg = "move:".to_string();
+        send_msg.push_str(&parser::get_move(pending_move_from, pending_move_to));
+        send_msg.push(match promotion {
+            chess_engine::game_data::Piece::Bishop => 'b',
+            chess_engine::game_data::Piece::Rook => 'r',
+            chess_engine::game_data::Piece::Queen => 'q',
+            chess_engine::game_data::Piece::None => '-',
+            chess_engine::game_data::Piece::Pawn => '-',
+            chess_engine::game_data::Piece::Knight => 'n',
+            chess_engine::game_data::Piece::King => '-',
+        });
+        send_msg.push(';');
+
+        let buff = send_msg.into_bytes();
+        if let Some(client) = &mut main_state.client {
+            let write_error = client.stream.write_all(&buff);
+            if write_error.is_ok() {
+                main_state.active_game.pending_move = None;
+            }
+        }
+    }
+}
+
+fn handle_message(main_state: &mut MainState, msg: String) {
+    let split: Vec<String> = msg.split(":").map(|s| s.to_string()).collect();
+    if split.len() != 2 {
+        return;
+    }
+
+    let action = &split[0];
+    let input = &split[1];
+
+    match &action[..] {
+        "playertype" => {
+            if let Some(client) = &mut main_state.client {
+                match input.chars().nth(0) {
+                    Some('p') => client.is_player = true,
+                    Some('s') => client.is_player = false,
+                    None => (),
+                    _ => (),
+                }
+            }
+        }
+        "board" => {
+            if let Some((game, threats)) = get_loaded_game(input.to_string()) {
+                main_state.active_game.win_status = WinStatus::Nothing;
+                main_state.active_game.game = game;
+                main_state.active_game.active_threats = threats;
+            }
+        }
+        "end" => {
+            let win_status = match input.chars().nth(0) {
+                Some('w') => WinStatus::WhiteWon,
+                Some('b') => WinStatus::BlackWon,
+                Some('-') => WinStatus::Tie,
+                None => WinStatus::Nothing,
+                _ => WinStatus::Nothing,
+            };
+
+            main_state.active_game.win_status = win_status;
+
+            if let Some((game, threats)) = get_loaded_game(input[1..].to_string()) {
+                main_state.active_game.game = game;
+                main_state.active_game.active_threats = threats;
+            }
+        }
+        _ => (),
+    }
+}
+
+fn get_server_messages(main_state: &mut MainState) -> (bool, Vec<String>) {
     let mut is_connected = true;
     let mut handle_msg: Vec<String> = Vec::new();
 
@@ -75,77 +146,18 @@ pub(crate) fn client_loop(main_state: &mut MainState) {
         }
     }
 
-    if is_connected {
-        if let Some((pending_move_from, pending_move_to, promotion)) =
-            main_state.active_game.pending_move
-        {
-            let mut send_msg = "move:".to_string();
-            send_msg.push_str(&parser::get_move(pending_move_from, pending_move_to));
-            send_msg.push(match promotion {
-                chess_engine::game_data::Piece::Bishop => 'b',
-                chess_engine::game_data::Piece::Rook => 'r',
-                chess_engine::game_data::Piece::Queen => 'q',
-                chess_engine::game_data::Piece::None => '-',
-                chess_engine::game_data::Piece::Pawn => '-',
-                chess_engine::game_data::Piece::Knight => 'n',
-                chess_engine::game_data::Piece::King => '-',
-            });
-            send_msg.push(';');
+    return (is_connected, handle_msg);
+}
 
-            let buff = send_msg.into_bytes();
-            if let Some(client) = &mut main_state.client {
-                let write_error = client.stream.write_all(&buff);
-                if write_error.is_ok() {
-                    main_state.active_game.pending_move = None;
-                }
-            }
-        }
+/**Must be called every client tick, reads all new messages and handles the server input */
+pub(crate) fn client_loop(main_state: &mut MainState) {
+    let (is_connected, handle_msg) = get_server_messages(main_state);
+
+    if is_connected {
+        send_pending_move(main_state);
 
         for msg in handle_msg {
-            let split: Vec<String> = msg.split(":").map(|s| s.to_string()).collect();
-            if split.len() != 2 {
-                return;
-            }
-
-            let action = &split[0];
-            let input = &split[1];
-
-            match &action[..] {
-                "playertype" => {
-                    if let Some(client) = &mut main_state.client {
-                        match input.chars().nth(0) {
-                            Some('p') => client.is_player = true,
-                            Some('s') => client.is_player = false,
-                            None => (),
-                            _ => (),
-                        }
-                    }
-                }
-                "board" => {
-                    if let Some((game, threats)) = get_loaded_game(input.to_string()) {
-                        main_state.active_game.win_status = WinStatus::Nothing;
-                        main_state.active_game.game = game;
-                        main_state.active_game.active_threats = threats;
-                    }
-                }
-                "end" => {
-                    let win_status = match input.chars().nth(0) {
-                        Some('w') => WinStatus::WhiteWon,
-                        Some('b') => WinStatus::BlackWon,
-                        Some('-') => WinStatus::Tie,
-                        None => WinStatus::Nothing,
-                        _ => WinStatus::Nothing,
-                    };
-
-                    main_state.active_game.win_status = win_status;
-
-                    if let Some((game, threats)) = get_loaded_game(input[1..].to_string()) {
-                        main_state.active_game.game = game;
-                        main_state.active_game.active_threats = threats;
-                    }
-                }
-                _ => (),
-            }
+            handle_message(main_state, msg);
         }
     } else {
         main_state.client = None;
